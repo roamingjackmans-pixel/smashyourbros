@@ -98,6 +98,11 @@ export function versusScreen(): void {
   }
 
   function startMatch(): void {
+    if (!seenControls()) {
+      markControls();
+      const close = modal(h('div.col', { style: { width: 'min(720px, 92vw)' } }, h('h2', 'How to smash'), controlsHelp(), h('button.big.primary', { onclick: () => (close(), startMatch()) }, 'Got it, let’s smash')), { wide: true });
+      return;
+    }
     const players = playerCfgs(slots, rules.teams);
     const cfg = buildCfg(rules, players);
     const live = slots.filter((s) => s.kind !== 'off');
@@ -126,6 +131,7 @@ export function versusScreen(): void {
         void import('./roster').then((r) => r.queueChallengers());
       },
       onPause: (resume, quit) => pauseMenu(resume, quit),
+      onQuit: () => (backToMenus(), versusScreen()),
     });
     m.start();
     audio.sfx('go');
@@ -209,3 +215,18 @@ export function controlsHelp(): HTMLElement {
 }
 
 void slotTint;
+
+function seenControls(): boolean {
+  try {
+    return localStorage.getItem('syb.seenControls') === '1';
+  } catch {
+    return true;
+  }
+}
+function markControls(): void {
+  try {
+    localStorage.setItem('syb.seenControls', '1');
+  } catch {
+    /* private mode */
+  }
+}

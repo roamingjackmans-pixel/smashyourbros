@@ -249,5 +249,5 @@ function stagePreview(id: string, flat: boolean): { el: HTMLCanvasElement; stop:
     drawBackground(c, st, cam, w, hh, t, false);
     cam.apply(c, w, hh);
     drawStage(c, st, t, false);
-  });
+  }, 3);
 }

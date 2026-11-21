@@ -84,7 +84,7 @@ export class Picker {
       const locked = !this.o.unlocked.includes(id);
       const tags = h('div.tags');
       const tile = h(`div.rtile${locked ? '.locked' : ''}`, { title: locked ? `Locked: ${taskFor(id)?.desc ?? 'keep playing'}` : `${r.def.name} — ${r.def.role}` });
-      const cv = liveCanvas('tilecv', (c, w, hh) => drawTile(c, w, hh, id, 0, this.t, locked));
+      const cv = liveCanvas('tilecv', (c, w, hh) => drawTile(c, w, hh, id, 0, this.t, locked), 4);
       this.stops.push(cv.stop);
       tile.append(cv.el, tags, h('div.nm', locked ? '???' : r.def.name));
       tile.addEventListener('click', () => {

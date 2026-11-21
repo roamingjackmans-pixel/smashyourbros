@@ -133,6 +133,7 @@ function playRound(humans: SlotPick[], intensity: number, rounds: ClassicRound[]
       runLadder(humans, intensity, at + 1);
     },
     onPause: (resume, quit) => pauseMenu(resume, quit),
+    onQuit: () => (backToMenus(), classicScreen()),
   });
   m.start();
   audio.sfx('go');

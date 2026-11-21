@@ -255,6 +255,7 @@ async function runNode(n: StoryNode, humans: SlotPick[]): Promise<void> {
   const m = localMatch(canvasEl, cfg, devices, { names, tints, palettes, local: devices.map((d) => !!d), objective }, {
     onEnd: (st: State) => void finishNode(n, st, humans, names, palettes, tints),
     onPause: (resume, quit) => pauseMenu(resume, quit),
+    onQuit: () => (backToMenus(), storyScreen()),
   });
   m.start();
 }

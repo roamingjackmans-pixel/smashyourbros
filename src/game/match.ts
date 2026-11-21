@@ -41,6 +41,8 @@ export class LocalDriver implements Driver {
 
 export interface MatchHooks {
   onEnd: (st: State) => void;
+  /** quit from the pause menu (defaults to onEnd) */
+  onQuit?: () => void;
   onPause?: (resume: () => void, quit: () => void) => void;
 }
 
@@ -112,7 +114,8 @@ export class Match {
       },
       () => {
         this.stop();
-        this.hooks.onEnd(this.st);
+        if (this.hooks.onQuit) this.hooks.onQuit();
+        else this.hooks.onEnd(this.st);
       },
     );
   }

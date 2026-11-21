@@ -51,6 +51,7 @@ export function challengerFight(fighter: string, then: () => void): void {
       then();
     },
     onPause: (resume, quit) => pauseMenu(resume, quit),
+    onQuit: () => (backToMenus(), then()),
   });
   m.start();
 }
@@ -119,7 +120,7 @@ export function rosterScreen(selected?: string): void {
         const id = r.def.id;
         const locked = !p.unlocked.includes(id);
         const tile = h(`div.rtile${locked ? '.locked' : ''}`, { style: { outline: id === cur ? '4px solid #fff' : '', cursor: 'pointer' } });
-        const tcv = liveCanvas('tilecv', (c, w, hh, t) => drawTile(c, w, hh, id, 0, t, locked));
+        const tcv = liveCanvas('tilecv', (c, w, hh, t) => drawTile(c, w, hh, id, 0, t, locked), 4);
         stops.push(tcv.stop);
         tile.append(tcv.el, h('div.nm', locked ? (p.challengers.includes(id) ? '! CHALLENGER' : '???') : r.def.name));
         tile.addEventListener('click', () => {

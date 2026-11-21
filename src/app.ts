@@ -195,6 +195,7 @@ export function mainMenu(): void {
       'div.userbar',
       h('span.chip', session.online ? `👤 ${session.user?.name}` : '👤 Offline'),
       session.online ? h('button.tiny', { onclick: () => void import('./ui/onlineUi').then((m) => m.friendsModal()) }, '👥 Friends') : '',
+      h('button.tiny', { title: 'Fullscreen', onclick: () => (document.fullscreenElement ? void document.exitFullscreen() : void document.documentElement.requestFullscreen?.()) }, '⛶'),
       h('button.tiny', { onclick: () => void import('./ui/settings').then((m) => m.settingsScreen()) }, '⚙'),
     );
     root.appendChild(

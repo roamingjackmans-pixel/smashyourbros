@@ -28,8 +28,9 @@ export function apiRoot(): string {
   return `${server}/games/shoallhell`;
 }
 
-/** the same key Shoallhell uses, so one sign-in covers both games */
-const TOKEN_KEY = 'shoallhell.token';
+/** the same key Shoallhell uses, so one sign-in covers both games (?slot=N keeps a separate sign-in, for testing two accounts in two tabs) */
+const SLOT = new URLSearchParams(location.search).get('slot');
+const TOKEN_KEY = SLOT ? `shoallhell.token.slot${SLOT}` : 'shoallhell.token';
 
 export function getToken(): string {
   try {

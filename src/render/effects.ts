@@ -1,9 +1,23 @@
 // Particles and pop-ups driven by simulation events (de-duplicated, since rollback replays frames).
 import { A } from '../sim/acts';
-import { STAGES } from '../sim/data';
+import { FIGHTERS, STAGES } from '../sim/data';
 import type { Ev, State } from '../sim/types';
 import { circle, OUTLINE, rgba } from './art';
 import type { Camera } from './camera';
+
+/** what a bro says after sending their bro into orbit */
+export const KO_QUIPS = [
+  'Sorry bro! Love you!',
+  'Call me when you land, bro!',
+  'That was a love tap, I swear!',
+  'Bro… you looked so good flying.',
+  'Same time next week? 💪',
+  'Hydrate up there, king!',
+  'I’d say sorry but you’re too cute to apologise to.',
+  'Respectfully: GET SMASHED, BRO.',
+  'Miss you already!',
+  'That one was for the group chat.',
+];
 
 export const FX_COL: Record<string, string> = {
   hit: '#fff27a',
@@ -25,7 +39,7 @@ export const FX_COL: Record<string, string> = {
 };
 
 interface P {
-  k: 'spark' | 'ring' | 'dust' | 'smoke' | 'text' | 'blast' | 'boom' | 'confetti' | 'shard' | 'note' | 'star' | 'splat';
+  k: 'spark' | 'ring' | 'dust' | 'smoke' | 'text' | 'blast' | 'boom' | 'confetti' | 'shard' | 'note' | 'star' | 'splat' | 'bubble';
   x: number;
   y: number;
   vx: number;
@@ -169,6 +183,12 @@ export class Effects {
       case 'orbbreak':
         for (let i = 0; i < 24; i++) this.add({ k: 'confetti', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 18, vy: (Math.random() - 0.7) * 16, life: 60, max: 60, size: 9, col: ['#ff3a6e', '#ffe14f', '#3affd5', '#b26bff'][i % 4], rot: Math.random() * 6 });
         break;
+      case 'taunt': {
+        const f = st.fighters[e.p];
+        const d = f ? FIGHTERS[f.def].def : null;
+        if (d) this.bubble(e.x, e.y - FIGHTERS[f.def].height - 40, d.line, tints[e.p] ?? '#fff');
+        break;
+      }
       case 'eat':
         this.text(e.x, e.y - 140, 'NOM!', '#ffb3a6', 28);
         break;
@@ -229,6 +249,12 @@ export class Effects {
     }
   }
 
+  /** a speech bubble (taunts, KO quips) */
+  bubble(x: number, y: number, text: string, col: string): void {
+    this.ps = this.ps.filter((p) => !(p.k === 'bubble' && Math.abs(p.x - x) < 200 && Math.abs(p.y - y) < 200));
+    this.add({ k: 'bubble', x, y, vy: -0.3, life: 170, max: 170, size: 22, col, text });
+  }
+
   private ko(st: State, e: Ev, cam: Camera, tints: string[]): void {
     const stg = STAGES[st.stage];
     const side = e.a ?? 0;
@@ -245,6 +271,10 @@ export class Effects {
       const sp = 14 + Math.random() * 30;
       this.add({ k: 'spark', x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 30, max: 30, size: 30, col: i % 3 ? col : '#ffffff', rot: a });
     }
+    // the bro who landed it says something sweet
+    const victim = st.fighters[e.p];
+    const killer = victim && victim.lastHitBy >= 0 ? st.fighters[victim.lastHitBy] : null;
+    if (killer && killer.act !== 29 && Math.random() < 0.7) this.bubble(killer.x, killer.y - FIGHTERS[killer.def].height - 40, KO_QUIPS[Math.floor(Math.random() * KO_QUIPS.length)], tints[killer.i] ?? '#fff');
     cam.addShake(24);
     this.flash = 0.35;
     this.flashCol = col;
@@ -397,6 +427,43 @@ export class Effects {
           c.fillRect(p.x + p.size * 0.22, p.y - p.size, 5, p.size);
           c.restore();
           break;
+        case 'bubble': {
+          c.save();
+          c.globalAlpha = Math.min(1, t * 4, (1 - t) * 10);
+          c.font = '800 22px Nunito, sans-serif';
+          const words = (p.text ?? '').split(' ');
+          const lines: string[] = [];
+          let cur = '';
+          for (const w of words) {
+            if ((cur + ' ' + w).trim().length > 30) {
+              lines.push(cur.trim());
+              cur = w;
+            } else cur += ' ' + w;
+          }
+          if (cur.trim()) lines.push(cur.trim());
+          const bw = Math.max(...lines.map((l) => c.measureText(l).width)) + 28;
+          const bh = lines.length * 26 + 18;
+          const bx = p.x - bw / 2;
+          const by = p.y - bh;
+          c.fillStyle = '#fff7ee';
+          c.strokeStyle = OUTLINE;
+          c.lineWidth = 4;
+          c.beginPath();
+          c.roundRect?.(bx, by, bw, bh, 14);
+          c.moveTo(p.x - 10, p.y);
+          c.lineTo(p.x, p.y + 16);
+          c.lineTo(p.x + 10, p.y);
+          c.fill();
+          c.stroke();
+          c.fillStyle = OUTLINE;
+          c.textAlign = 'center';
+          c.textBaseline = 'top';
+          lines.forEach((l, i) => c.fillText(l, p.x, by + 10 + i * 26));
+          c.fillStyle = p.col;
+          c.fillRect(bx + 10, by + bh - 6, bw - 20, 3);
+          c.restore();
+          break;
+        }
         case 'splat':
           c.save();
           c.globalAlpha = Math.min(1, t * 2);

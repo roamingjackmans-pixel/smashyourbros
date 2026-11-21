@@ -16,8 +16,8 @@ function jetOn(v: FView): boolean {
 }
 
 export const kitArt: ArtDef = {
-  limb: 11,
-  handR: 8,
+  limb: 12.5,
+  handR: 9,
   footL: 22,
   palettes: [
     { name: 'Launch Orange', main: '#ff8a2a', second: '#f4f1ea', accent: '#7fe3ff', skin: '#ffcfa6', extra: '#d8432f' },
@@ -134,13 +134,17 @@ export const kitArt: ArtDef = {
     c.restore();
   },
   weapon: (c, v) => {
-    // the ray blaster sits in the front fist
+    // a chunky ray blaster in the front fist, barrel along the forearm
     const k = v.k;
     boneFrame(c, v, k.handF, k.ang.foreF);
-    rrect(c, -6, -26, 12, 22, 4);
-    fillStroke(c, '#c9d2e3', v.ol, 2.6);
-    rrect(c, -4, -34, 8, 10, 3);
-    fillStroke(c, v.p.accent, v.ol, 2.2);
+    rrect(c, -8, -30, 16, 30, 6);
+    fillStroke(c, '#e9edf5', v.ol, 2.8);
+    c.fillStyle = v.p.main;
+    c.fillRect(-8, -20, 16, 5);
+    rrect(c, -5, -44, 10, 16, 4);
+    fillStroke(c, '#9aa3b5', v.ol, 2.4);
+    circle(c, 0, -46, 5.5, v.p.accent, v.ol, 2.2);
+    if (v.f.act === 9 && (v.t % 6) < 3) circle(c, 0, -48, 9, 'rgba(160,240,255,0.55)', null, 0);
     c.restore();
   },
   portrait: (c, p) => {

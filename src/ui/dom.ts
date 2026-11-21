@@ -75,7 +75,7 @@ export function toast(msg: string, kind: 'ok' | 'bad' | 'gold' = 'ok', ms = 3200
 }
 
 /** a canvas element sized to its CSS box at device pixel ratio, with a draw callback each animation frame */
-export function liveCanvas(cls: string, draw: (c: CanvasRenderingContext2D, w: number, h: number, t: number) => void): { el: HTMLCanvasElement; stop: () => void } {
+export function liveCanvas(cls: string, draw: (c: CanvasRenderingContext2D, w: number, h: number, t: number) => void, every = 1): { el: HTMLCanvasElement; stop: () => void } {
   const el = h(`canvas.${cls}`) as HTMLCanvasElement;
   let raf = 0;
   let t = 0;
@@ -84,6 +84,7 @@ export function liveCanvas(cls: string, draw: (c: CanvasRenderingContext2D, w: n
     if (stopped) return;
     raf = requestAnimationFrame(loop);
     if (!el.isConnected) return;
+    if (t++ % every !== 0) return;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.max(1, Math.floor(el.clientWidth * dpr));
     const hh = Math.max(1, Math.floor(el.clientHeight * dpr));
@@ -94,7 +95,7 @@ export function liveCanvas(cls: string, draw: (c: CanvasRenderingContext2D, w: n
     const c = el.getContext('2d')!;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.clearRect(0, 0, w, hh);
-    draw(c, w, hh, t++);
+    draw(c, w, hh, t);
   };
   raf = requestAnimationFrame(loop);
   return {

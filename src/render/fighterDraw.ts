@@ -49,7 +49,7 @@ export function fighterView(st: State, f: Fighter, k: Skel, p: Palette, t: numbe
     p,
     t,
     expr: expressionOf(f),
-    blink: (t + f.i * 37) % 200 < 7,
+    blink: t > 20 && (t + f.i * 37) % 200 < 7,
     flash: f.hitlag > 0 && f.hurtFx > 0 ? 1 : 0,
     ol: OUTLINE,
   };
