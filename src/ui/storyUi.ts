@@ -3,7 +3,8 @@
 import { canvasEl, inMatch, mainMenu, show, backToMenus } from '../app';
 import { session, save } from '../game/session';
 import { localMatch } from '../game/match';
-import type { Device } from '../game/input';
+import { defaultDevice, deviceTapJump, type Device } from '../game/input';
+import { hintBar } from './glyphs';
 import { EPISODES, foeConfigs, nextNode, unlockedNode, type Line, type StoryNode } from '../data/story';
 import { checkTasks } from '../data/tasks';
 import { FIGHTER_INDEX, FIGHTERS } from '../sim/data';
@@ -62,7 +63,7 @@ export function playScene(lines: Line[], you: string): Promise<void> {
     let speaker = '';
     const name = h('span.spk');
     const text = h('span');
-    const bubble = h('div.bubble', name, text, h('div.hint', 'click / Space to continue · Esc to skip'));
+    const bubble = h('div.bubble', name, text, h('div.hint', hintBar([['menuConfirm', 'Continue'], ['menuBack', 'Skip']], 16)));
     const pcv = liveCanvas('portrait', (c, w, hh, t) => {
       const who = speaker;
       if (who === 'cue') return drawCue(c, w, hh, t);
@@ -79,7 +80,8 @@ export function playScene(lines: Line[], you: string): Promise<void> {
     });
     pcv.el.classList.add('portrait');
     const el = h('div.dialogue', pcv.el, bubble);
-    const back = h('div.screen.clear', { style: { background: 'linear-gradient(180deg, transparent 40%, rgba(10,4,18,0.75))' } }, el);
+    // a pad's confirm presses this layer (it has no buttons), back sends Escape = skip (ui/menuPad.ts)
+    const back = h('div.screen.clear', { 'data-pad-confirm': true, style: { background: 'linear-gradient(180deg, transparent 40%, rgba(10,4,18,0.75))' } }, el);
     uiRoot().appendChild(back);
     let timer = 0;
     const setLine = (): void => {
@@ -111,7 +113,6 @@ export function playScene(lines: Line[], you: string): Promise<void> {
     const finish = (): void => {
       clearInterval(timer);
       window.removeEventListener('keydown', onKey);
-      clearInterval(padIv);
       pcv.stop();
       back.remove();
       resolve();
@@ -123,14 +124,6 @@ export function playScene(lines: Line[], you: string): Promise<void> {
       }
       if (e.code === 'Escape') finish();
     };
-    let padPrev = false;
-    const padIv = window.setInterval(() => {
-      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-      let a = false;
-      for (const g of pads) if (g?.buttons[0]?.pressed) a = true;
-      if (a && !padPrev) advance();
-      padPrev = a;
-    }, 50);
     back.addEventListener('click', advance);
     window.addEventListener('keydown', onKey);
     setLine();
@@ -166,7 +159,7 @@ export function storyScreen(): void {
         const ok = unlockedNode(cleared, n.id);
         const isDone = cleared.includes(n.id);
         const icon = n.kind === 'ko' ? '🤖' : n.kind === 'survive' ? '⏱' : n.kind === 'boss' ? '📹' : n.foes.some((f) => f.ally) ? '🤝' : '🥊';
-        const el = h(`div.node${isDone ? '.done' : ''}${next?.id === n.id ? '.next' : ''}${ok ? '' : '.locked'}`, h('div', h('b', `${icon} ${n.title}`)), h('div.small', n.blurb));
+        const el = h(`div.node${isDone ? '.done' : ''}${next?.id === n.id ? '.next' : ''}${ok ? '' : '.locked'}`, ok ? { tabindex: '0', role: 'button' } : {}, h('div', h('b', `${icon} ${n.title}`)), h('div.small', n.blurb));
         if (ok) el.addEventListener('click', () => storySetup(n));
         nodes.appendChild(el);
       }
@@ -175,7 +168,7 @@ export function storyScreen(): void {
     root.appendChild(
       h(
         'div.screen',
-        h('div.topbar', h('button', { onclick: () => mainMenu() }, '◀ Back'), h('h2', 'Prime-Time Brawl'), session.online ? h('button.teal', { onclick: () => void import('./onlineUi').then((m) => m.onlineScreen(undefined, 'story')) }, '🌐 Play with friends online') : '', next ? h('button.big.primary', { onclick: () => storySetup(next) }, `▶ ${next.title}`) : h('span.chip', '★ Season complete!')),
+        h('div.topbar', h('button', { 'data-back': true, onclick: () => mainMenu() }, '◀ Back'), h('h2', 'Prime-Time Brawl'), session.online ? h('button.teal', { onclick: () => void import('./onlineUi').then((m) => m.onlineScreen(undefined, 'story')) }, '🌐 Play with friends online') : '', next ? h('button.big.primary', { 'data-pad-start': true, onclick: () => storySetup(next) }, `▶ ${next.title}`) : h('span.chip', '★ Season complete!')),
         map,
       ),
     );
@@ -187,7 +180,7 @@ function storySetup(n: StoryNode): void {
   show((root) => {
     const p = session.profile;
     const slots: SlotPick[] = [
-      { kind: 'human', fighter: p.unlocked[0], palette: 0, cpu: 0, team: 0, device: { kind: 'kb', index: 0, tapJump: p.settings.tapJumpKb }, name: session.user?.name ?? 'P1' },
+      { kind: 'human', fighter: p.unlocked[0], palette: 0, cpu: 0, team: 0, device: defaultDevice(0), name: session.user?.name ?? 'P1' },
       { kind: 'off', fighter: 'kit', palette: 1, cpu: 0, team: 0, device: null, name: 'P2' },
       { kind: 'off', fighter: 'kit', palette: 2, cpu: 0, team: 0, device: null, name: 'P3' },
       { kind: 'off', fighter: 'kit', palette: 3, cpu: 0, team: 0, device: null, name: 'P4' },
@@ -203,11 +196,12 @@ function storySetup(n: StoryNode): void {
         for (const s of slots) if (s.kind === 'cpu') s.kind = 'human';
       },
       active: 0,
+      join: true,
     });
     root.appendChild(
       h(
         'div.screen',
-        h('div.topbar', h('button', { onclick: () => (picker.destroy(), storyScreen()) }, '◀ Map'), h('h2', n.title), h('button.big.primary', { onclick: () => (picker.destroy(), void runNode(n, slots.filter((s) => s.kind === 'human'))) }, 'Roll camera ▶')),
+        h('div.topbar', h('button', { 'data-back': true, onclick: () => (picker.destroy(), storyScreen()) }, '◀ Map'), h('h2', n.title), h('button.big.primary', { 'data-pad-start': true, onclick: () => (picker.destroy(), void runNode(n, slots.filter((s) => s.kind === 'human'))) }, 'Roll camera ▶')),
         h('div.panel.small', { style: { maxWidth: '900px', marginBottom: '10px' } }, n.blurb, h('div.dim', 'Couch co-op: add up to three more players on this device (👤 on a slot).')),
         picker.el,
       ),
@@ -245,7 +239,7 @@ async function runNode(n: StoryNode, humans: SlotPick[]): Promise<void> {
   const you = humans[0]?.fighter ?? 'kit';
   show(() => {});
   await playScene(n.before ?? [], you);
-  const hcfg: PlayerCfg[] = humans.map((s, i) => ({ fighter: s.fighter, color: s.palette, team: 0, cpu: 0, name: s.name || `P${i + 1}`, tapJump: s.device?.kind === 'pad' ? session.profile.settings.tapJumpPad : session.profile.settings.tapJumpKb }));
+  const hcfg: PlayerCfg[] = humans.map((s, i) => ({ fighter: s.fighter, color: s.palette, team: 0, cpu: 0, name: s.name || `P${i + 1}`, tapJump: deviceTapJump(s.device) }));
   const cfg = nodeCfg(n, hcfg);
   const devices: (Device | null)[] = cfg.players.map((_, i) => (i < humans.length ? (humans[i].device ?? { kind: 'kb', index: 0, tapJump: false }) : null));
   const names = cfg.players.map((pl, i) => (i < humans.length ? pl.name : FIGHTERS[FIGHTER_INDEX[pl.fighter]].def.name));

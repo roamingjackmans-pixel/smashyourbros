@@ -62,6 +62,10 @@ export class OnlineDriver implements Driver {
     return this.session.st;
   }
 
+  deviceFor(slot: number): Device | null {
+    return slot === this.localSlot ? this.device : null;
+  }
+
   tick(onStep: (st: State) => void): void {
     this.tickN++;
     const s = this.session;

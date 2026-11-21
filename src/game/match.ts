@@ -7,8 +7,14 @@ import { cloneState, initState, step } from '../sim/sim';
 import type { MatchCfg, State } from '../sim/types';
 import { bigText } from '../render/hud';
 import { Renderer, type ViewOpts } from '../render/renderer';
-import { readDevice, type Device } from './input';
+import { pausePressed, readDevice, type Device } from './input';
+import { getPad, pollPads, rumble } from './pads';
+import type { Ev } from '../sim/types';
+import { toast } from '../ui/dom';
 import { audio } from '../audio/audio';
+import { screenT } from '../render/art';
+import { perfWork } from './perf';
+import { MatchTracker } from './stats';
 
 export interface Driver {
   readonly online: boolean;
@@ -18,6 +24,8 @@ export interface Driver {
   /** text for a banner while stalled (online) */
   waiting?(): string | null;
   stop?(): void;
+  /** the device playing a slot on this machine, if any (pause, rumble) */
+  deviceFor?(slot: number): Device | null;
 }
 
 export class LocalDriver implements Driver {
@@ -31,6 +39,9 @@ export class LocalDriver implements Driver {
   }
   state(): State {
     return this.st;
+  }
+  deviceFor(slot: number): Device | null {
+    return this.devices[slot] ?? null;
   }
   tick(onStep: (st: State) => void): void {
     const inputs = this.devices.map((d) => (d ? readDevice(d) : NEUTRAL));
@@ -54,7 +65,10 @@ export class Match {
   private acc = 0;
   private last = 0;
   private hist: State[] = [];
-  private replay: { states: State[]; i: number; sub: number; x: number; y: number } | null = null;
+  private replay: { states: State[]; i: number; sub: number; x: number; y: number; acc: number } | null = null;
+  /** time since the canvas was last drawn (the renderer's clocks advance by it) */
+  private drawDt = 0;
+  private drawnAt = 0;
   private ended = false;
   private paused = false;
   private sawOver = false;
@@ -67,7 +81,53 @@ export class Match {
     public hooks: MatchHooks,
   ) {
     this.r = new Renderer(canvas);
-    this.r.fx.onEvent = (e, st) => audio.event(e, st);
+    const local = view.local.map((l, i) => (l ? i : -1)).filter((i) => i >= 0);
+    this.tracker = local.length ? new MatchTracker(local) : null;
+    this.r.fx.onEvent = (e, st) => {
+      audio.event(e, st);
+      this.tracker?.event(e, st);
+      this.rumbleFor(e, st);
+    };
+  }
+
+  /** the pad playing a slot here, or -1 */
+  private padOf(slot: number): number {
+    const d = this.driver.deviceFor?.(slot);
+    return d && d.kind === 'pad' ? d.index : -1;
+  }
+
+  /** controller rumble on hits, KOs, parries, shield breaks and ultimates (D23; Settings → Controls → Rumble) */
+  private rumbleFor(e: Ev, st: State): void {
+    if (e.p < 0 || !this.driver.deviceFor) return;
+    const buzz = (slot: number, strong: number, weak: number, ms: number): void => {
+      const pad = this.padOf(slot);
+      if (pad >= 0) rumble(pad, strong, weak, ms);
+    };
+    switch (e.t) {
+      case 'hit': {
+        const dmg = e.a ?? 5;
+        const kb = e.b ?? 30;
+        buzz(e.p, 0.1, Math.min(0.6, 0.2 + dmg * 0.02), 70 + Math.min(80, dmg * 4));
+        // the one who got hit: the bro in hitlag last hit by this attacker
+        for (const f of st.fighters) if (f.i !== e.p && f.hitlag > 0 && f.lastHitBy === e.p) buzz(f.i, Math.min(1, kb / 140), Math.min(1, 0.3 + kb / 200), 90 + Math.min(200, kb * 1.2));
+        break;
+      }
+      case 'ko': {
+        buzz(e.p, 1, 0.9, 480);
+        const killer = st.fighters[e.p]?.lastHitBy ?? -1;
+        if (killer >= 0 && killer !== e.p) buzz(killer, 0.55, 0.45, 260);
+        break;
+      }
+      case 'parry':
+        buzz(e.p, 0, 0.7, 90);
+        break;
+      case 'break':
+        buzz(e.p, 0.9, 0.6, 520);
+        break;
+      case 'ult':
+        buzz(e.p, 0.5, 0.5, 320);
+        break;
+    }
   }
 
   get st(): State {
@@ -120,31 +180,63 @@ export class Match {
     );
   }
 
-  private padStartWasDown = false;
+  private padsSeen = new Set<number>();
+  /** combos, moves and taunts for the lifetime stats (D24) */
+  tracker: MatchTracker | null;
   private frame(now: number): void {
-    const dt = Math.min(0.1, (now - this.last) / 1000);
+    const t0 = performance.now();
+    this.step(now);
+    perfWork(performance.now() - t0);
+  }
+
+  private step(now: number): void {
+    const raw = now - this.last;
+    const dt = Math.min(0.1, raw / 1000);
     this.last = now;
-    if (!this.driver.online) {
-      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-      let start = false;
-      for (const g of pads) if (g?.buttons[9]?.pressed) start = true;
-      if (start && !this.padStartWasDown && !this.st.over) this.togglePause();
-      this.padStartWasDown = start;
+    if (!this.paused) this.r.res.note(raw, now);
+    pollPads();
+    if (!this.paused && !this.replay && !this.st.over) {
+      // any local player's Pause button; a player's controller unplugged pauses too (D23)
+      for (let i = 0; i < this.st.fighters.length; i++) {
+        const d = this.driver.deviceFor?.(i) ?? null;
+        if (!d || d.kind !== 'pad') continue;
+        const present = !!getPad(d.index);
+        if (this.padsSeen.has(d.index) && !present) {
+          this.padsSeen.delete(d.index);
+          if (this.driver.online) toast(`P${i + 1}'s controller disconnected. Plug it back in, bro!`, 'bad', 5000);
+          else if (this.hooks.onPause) {
+            toast(`P${i + 1}'s controller disconnected. Paused till it's back.`, 'bad', 5000);
+            this.togglePause();
+            break;
+          }
+        } else if (present) this.padsSeen.add(d.index);
+        if (!this.driver.online && pausePressed(d)) {
+          this.togglePause();
+          break;
+        }
+      }
     }
     if (this.paused) {
-      this.r.draw(this.st, this.view, 0);
+      // the pause menu covers the match: redraw now and then (a resize clears the canvas), not every frame
+      if (now - this.drawnAt > 250) this.paint(now, 0);
       return;
     }
+    this.drawDt += dt;
     if (this.replay) {
-      this.runReplay(dt);
+      this.runReplay(dt, now);
       return;
     }
     this.acc += dt;
     let n = 0;
-    while (this.acc >= STEP && n < 6) {
+    // a step is due a little early (85 %) so frame-time jitter on a 60 Hz screen doesn't skip one frame and double
+    // the next; over time it still averages exactly 60 steps a second
+    while (this.acc >= STEP * 0.85 && n < 6) {
       this.acc -= STEP;
       n++;
-      this.driver.tick((s) => this.r.ingest(s, this.view.tints));
+      this.driver.tick((s) => {
+        this.r.ingest(s, this.view.tints);
+        this.tracker?.step(s);
+      });
       const st = this.st;
       if (!st.over) {
         this.hist.push(cloneState(st));
@@ -159,20 +251,30 @@ export class Match {
         this.ended = true;
         setTimeout(() => {
           this.stop();
+          this.tracker?.finish(this.st);
           this.hooks.onEnd(this.st);
         }, 250);
       }
     }
     if (this.acc > STEP * 6) this.acc = 0;
-    this.r.draw(this.st, this.view, dt);
+    // draw only when the simulation moved (a 120 Hz screen used to draw every state twice, D22), or now and then while
+    // an online match waits for someone
+    if (n === 0 && now - this.drawnAt < 100) return;
+    this.paint(now, this.drawDt);
     const w = this.driver.waiting?.();
     if (w) {
       const c = this.r.c;
-      c.setTransform(1, 0, 0, 1, 0, 0);
+      screenT(c);
       c.fillStyle = 'rgba(0,0,0,0.45)';
       c.fillRect(0, this.r.h * 0.4, this.r.w, this.r.h * 0.16);
       bigText(c, w, this.r.w / 2, this.r.h * 0.48, Math.round(this.r.h * 0.045), '#ffe14f');
     }
+  }
+
+  private paint(now: number, dt: number): void {
+    this.r.draw(this.st, this.view, dt);
+    this.drawDt = 0;
+    this.drawnAt = now;
   }
 
   /** slow-motion zoom on the winning hit */
@@ -194,36 +296,47 @@ export class Match {
     const from = Math.max(0, hitAt - 14);
     const states = this.hist.slice(from, Math.min(this.hist.length, hitAt + 40));
     const vf = this.hist[hitAt].fighters[victim];
-    this.replay = { states, i: 0, sub: 0, x: vf.x, y: vf.y - 60 };
+    this.replay = { states, i: 0, sub: 0, x: vf.x, y: vf.y - 60, acc: 0 };
     this.r.fx.seen.clear();
     audio.event({ t: 'finalhit', x: 0, y: 0, p: victim }, st);
   }
 
-  private runReplay(dt: number): void {
+  /** the replay advances on the 60 Hz clock too (it used to step once per drawn frame) */
+  private runReplay(dt: number, now: number): void {
     const rp = this.replay!;
-    const s = rp.states[rp.i];
-    // keep the online session ticking underneath (so nobody stalls waiting for us)
-    if (this.driver.online) this.driver.tick(() => {});
-    this.r.cam.punchX = rp.x;
-    this.r.cam.punchY = rp.y;
-    this.r.cam.punch = Math.min(0.75, this.r.cam.punch + 0.05);
-    if (rp.sub === 0) this.r.ingest(s, this.view.tints);
-    this.r.draw(s, { ...this.view, hideHud: true }, dt * 0.25);
-    const c = this.r.c;
-    c.setTransform(1, 0, 0, 1, 0, 0);
-    c.fillStyle = 'rgba(120,170,255,0.12)';
-    c.fillRect(0, 0, this.r.w, this.r.h);
-    rp.sub++;
-    const slow = rp.i < 22 ? 4 : 2;
-    if (rp.sub >= slow) {
-      rp.sub = 0;
-      rp.i++;
-      if (rp.i >= rp.states.length) {
-        this.replay = null;
-        this.r.cam.punch = 0;
-        this.st.overFrame = 0;
+    rp.acc += dt;
+    let ticked = false;
+    let s = rp.states[rp.i];
+    while (rp.acc >= STEP * 0.85 && this.replay) {
+      rp.acc -= STEP;
+      ticked = true;
+      // keep the online session ticking underneath (so nobody stalls waiting for us)
+      if (this.driver.online) this.driver.tick(() => {});
+      s = rp.states[rp.i];
+      this.r.cam.punchX = rp.x;
+      this.r.cam.punchY = rp.y;
+      this.r.cam.punch = Math.min(0.75, this.r.cam.punch + 0.05);
+      if (rp.sub === 0) this.r.ingest(s, this.view.tints);
+      rp.sub++;
+      const slow = rp.i < 22 ? 4 : 2;
+      if (rp.sub >= slow) {
+        rp.sub = 0;
+        rp.i++;
+        if (rp.i >= rp.states.length) {
+          this.replay = null;
+          this.r.cam.punch = 0;
+          this.st.overFrame = 0;
+        }
       }
     }
+    if (!ticked) return;
+    this.r.draw(s, { ...this.view, hideHud: true }, this.drawDt * 0.25);
+    this.drawDt = 0;
+    this.drawnAt = now;
+    const c = this.r.c;
+    screenT(c);
+    c.fillStyle = 'rgba(120,170,255,0.12)';
+    c.fillRect(0, 0, this.r.w, this.r.h);
   }
 }
 

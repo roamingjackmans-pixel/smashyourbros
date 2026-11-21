@@ -50,3 +50,54 @@ Newest last. Each: what, why.
   games' lowercase folders; both work.
 - **D21** Stage hazards (toggle in Rules): a falling stage light (Studio), a falling neon sign (Rooftops), a
   cannonball from offscreen (Galleon), drifting debris (Orbit). Off in story and Classic objectives.
+- **D22 (owner: "the frame rate drops a ton regularly")** Measured first, on the owner's laptop: the game ran on the
+  Intel iGPU (hybrid graphics; browsers default to it) at 2560×1600 on a 120 Hz screen. Headless Chromium pinned to
+  that GPU, 4-CPU matches and the menus: 23–37 fps with stalls of 0.3–1.2 s; game code was only ~1 ms a frame and
+  GC/cloning negligible (state 6 kB, `structuredClone` 0.03 ms, so the final-hit replay history stays), so it was all
+  GPU raster. Causes and fixes: (1) **canvas `filter`** on the hit flash, star power, frozen fighters and locked
+  roster silhouettes — Chrome renders every path under it through its own full-canvas layer (one flashing fighter
+  cost up to a second); replaced by drawing the fighter into a scratch canvas the size of its box and washing it with
+  `source-atop` (995 ms → 13 ms worst case in a read-back test, then nothing measurable). (2) Full-screen gradients
+  re-shaded every frame (≈20× a flat fill): sky layers are cached per screen size, the studio spotlights, the orbit
+  planet, the KO beam and explosions are cached sprites. (3) `shadowBlur` glows (stagehands, Zippy) are wide faint
+  strokes. (4) Everything was drawn on every display refresh: the match draws only when the sim advanced, effects /
+  animation time / percent shake / the replay run on a 60 Hz clock (they ran double speed at 120 Hz), menu portraits
+  are time-based, sleep off-screen and cap at 1.5 px/px, the locked-tile CSS grayscale filter is gone, HUD portraits
+  are cached. (5) **Resolution:** the match canvas draws in logical pixels (CSS × DPR ≤ 2, so the HUD looks as
+  before) with an adaptive backing scale (`render/quality.ts`): Auto caps at 2560×1600 and steps down 0.1 (to 0.5)
+  when ≥3 of 45 frames are late (>25 ms), back up after 6 s on time (not to a failed level within 30 s); Sharp = full,
+  Fast = 720p budget; the attract match behind menus caps at 0.6. Graphics quality is per device (localStorage).
+  Result, same GPU and size: 60.0 fps everywhere, worst frame 16.8 ms, 0 late frames, matches at full 2560×1600.
+  `?fps` (or Settings → Graphics) shows a frame-time overlay (fps, p50/p95/worst, late frames, game-code ms, canvas
+  size).
+- **D23 (owner: "work well with controllers the way DungeonJoe does")** Ported DungeonJoe's approach: one pad poller
+  (`game/pads.ts`) reads every controller once per frame into the standard layout; button prompts drawn in code
+  (`ui/glyphs.ts`); menus driven by the pad (`ui/menuPad.ts`); DungeonJoe's Steam Controller WebHID driver unchanged
+  (`game/steamController.ts`). Beyond DungeonJoe: **Switch Pro / Joy-Con** (Switch pictures; "Nintendo labels" on by
+  default swaps A/B and X/Y so the button *labelled* A is A, confirming like the console), **generic / non-standard**
+  pads (buttons as listed, a hat switch or axes 6/7 become the D-pad, right stick from DirectInput Z/Rz; generic
+  pictures show which face position), **several pads at once** (DungeonJoe is one player). Layouts are **per player
+  port P1–P4** in the profile (`settings.pads`): every action rebindable to two buttons with DungeonJoe's swap rule,
+  the right stick as smash stick / tilt stick / specials stick / off (a flick reads as direction + Attack at 52, under
+  the smash and tap-jump thresholds, or direction + Special at 75, for 3 frames), deadzone, tap jump (the old single
+  gamepad tap-jump setting migrates). Menu confirm / back are one pair for everyone. `readDevice()` still returns the
+  same `pack(x, y, b, c)` int: the sim and netcode are untouched. Menus: every clickable tile is focusable, the focus
+  ring shows under pad / arrow keys, Back buttons carry `data-back`, a screen's main action `data-pad-start`
+  (Start), Rules `data-pad-view` (View); a button a menu used is swallowed until released, so it never leaks into a
+  match. The character picker gives each pad its own cursor (A pick, X/Y colour, B leave, View for the shared menu,
+  Start fight); a new pad joins with A or Start into the first free port (a keyboard idle for 15 s gives up P1);
+  P1 starts on whichever device was used last. Hot-plug toasts; unplugging a player's pad pauses a local match.
+  Rumble on hits (both bros), KOs, parries, shield breaks and ultimates, strength Off / Gentle / Full (DungeonJoe has
+  none). Lobby and friend codes get an on-screen number pad. Still keyboard-only: typing an email/password and
+  renaming (text entry).
+- **D24 (owner: "statistics and achievements on the home screen")** Lifetime stats extend the existing
+  `profile.stats` (matches and wins per mode, time in matches, damage taken, hits, best KOs / damage in a match,
+  flawless and team wins, modes and stages played) plus what a presentation-side `MatchTracker` sees per match
+  (longest combo = hits while the victim never got to act, combos of 3+, moves used → favourite move, taunts); it
+  never touches the sim and skips rollback re-simulated frames. Classic rounds and challenger fights now count too
+  (they had no results screen). 47 achievements (`data/achievements.ts`, bro-tone names) with progress bars and
+  unlock toasts; earned-before-they-existed ones are granted quietly at sign-in with one toast. The twelve unlock
+  tasks stay as they were and show on the Trophies screen beside the achievements. Home screen: a stats panel beside
+  the tiles (favourite bro, signature move, 9 numbers, recent results, latest and next achievement) and a TROPHIES
+  tile (Achievements / Unlock tasks / Statistics tabs). A full save stays well under the server's 400 kB profile
+  limit (test: < 40 kB), so the server is unchanged.

@@ -5,7 +5,9 @@ import { FIGHTERS } from '../sim/data';
 import { mod } from '../sim/mods';
 import type { Fighter, State } from '../sim/types';
 import { bigText, drawBanners, drawHud, drawOffscreen, type HudInfo } from './hud';
-import { circle, OUTLINE, rgba } from './art';
+import { circle, OUTLINE, rgba, screenT, setBaseScale } from './art';
+import { Resolution } from './quality';
+import { perfInfo } from '../game/perf';
 import { Camera } from './camera';
 import { Effects } from './effects';
 import { drawFighter, drawShield } from './fighterDraw';
@@ -18,34 +20,49 @@ export const TEAM_TINTS = ['#ff3a4e', '#3a8dff', '#3ad27a', '#ffcf3a'];
 export interface ViewOpts extends HudInfo {
   boxes?: boolean;
   topsy?: boolean;
+  /** the attract match behind the menus: rendered at a lower resolution */
+  backdrop?: boolean;
 }
+
+const TICK = 1 / 60;
 
 export class Renderer {
   c: CanvasRenderingContext2D;
   cam = new Camera();
   fx = new Effects();
   t = 0;
+  /** logical size (CSS pixels × device pixel ratio, at most 2): everything draws in these units */
   w = 1;
   h = 1;
   dpr = 1;
+  /** backing pixels per logical pixel (adaptive, D22) */
+  scale = 1;
+  res = new Resolution();
   private lastDmg: number[] = [];
   private shakeP: number[] = [];
-  /** fighters' previous positions for smoothing at high refresh rates */
+  /** effects, animation time and the percent shake run on a 60 Hz clock, not once per drawn frame */
+  private tickAcc = 0;
   constructor(public canvas: HTMLCanvasElement) {
     this.c = canvas.getContext('2d', { alpha: false })!;
     this.resize();
   }
 
-  resize(): void {
+  resize(backdrop = false): void {
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     const w = Math.max(1, Math.floor(this.canvas.clientWidth * this.dpr));
     const h = Math.max(1, Math.floor(this.canvas.clientHeight * this.dpr));
-    if (w !== this.canvas.width || h !== this.canvas.height) {
-      this.canvas.width = w;
-      this.canvas.height = h;
+    const q = this.res.current(w, h, backdrop);
+    const bw = Math.max(1, Math.round(w * q));
+    const bh = Math.max(1, Math.round(h * q));
+    if (bw !== this.canvas.width || bh !== this.canvas.height) {
+      this.canvas.width = bw;
+      this.canvas.height = bh;
     }
     this.w = w;
     this.h = h;
+    this.scale = bw / w;
+    setBaseScale(this.c, this.scale);
+    if (!backdrop || !perfInfo.w || perfInfo.scale <= this.scale) Object.assign(perfInfo, { w: bw, h: bh, scale: this.scale, logicalW: w, logicalH: h });
   }
 
   /** process new simulation events (call once per simulated frame) */
@@ -54,8 +71,7 @@ export class Renderer {
   }
 
   draw(st: State, o: ViewOpts, dt: number): void {
-    this.resize();
-    this.t++;
+    this.resize(!!o.backdrop);
     const c = this.c;
     const { w, h } = this;
     const tints = o.tints;
@@ -66,14 +82,23 @@ export class Renderer {
     this.cam.rot += (targetRot - this.cam.rot) * 0.06;
     if (Math.abs(this.cam.rot - targetRot) < 0.001) this.cam.rot = targetRot;
     const blackout = mod(st, 'blackout') && st.timer % 1500 > 900;
-    this.fx.update();
-    this.fx.trails(st);
-    // percent shake when damage goes up
-    st.fighters.forEach((f, i) => {
-      if (this.lastDmg[i] !== undefined && f.dmg > this.lastDmg[i] + 0.5) this.shakeP[i] = Math.min(16, 4 + (f.dmg - this.lastDmg[i]) * 0.8);
-      this.lastDmg[i] = f.dmg;
-      this.shakeP[i] = Math.max(0, (this.shakeP[i] ?? 0) - 0.7);
-    });
+    this.tickAcc += dt;
+    let ticks = 0;
+    while (this.tickAcc >= TICK * 0.85 && ticks < 4) {
+      this.tickAcc -= TICK;
+      ticks++;
+      this.t++;
+      this.fx.update();
+      this.fx.trails(st);
+      // percent shake when damage goes up
+      for (let i = 0; i < st.fighters.length; i++) {
+        const f = st.fighters[i];
+        if (this.lastDmg[i] !== undefined && f.dmg > this.lastDmg[i] + 0.5) this.shakeP[i] = Math.min(16, 4 + (f.dmg - this.lastDmg[i]) * 0.8);
+        this.lastDmg[i] = f.dmg;
+        this.shakeP[i] = Math.max(0, (this.shakeP[i] ?? 0) - 0.7);
+      }
+    }
+    if (this.tickAcc > TICK * 4) this.tickAcc = 0;
 
     drawBackground(c, st, this.cam, w, h, this.t, blackout);
     this.cam.apply(c, w, h);
@@ -86,33 +111,36 @@ export class Renderer {
     const skels = allSkels(st);
     // fighters, back to front by index
     const invisible = mod(st, 'invisible');
-    const order = st.fighters.slice().sort((a, b) => (a.act === A.GRABBED ? -1 : 0) - (b.act === A.GRABBED ? -1 : 0));
-    for (const f of order) {
-      if (f.out || f.act === A.DEAD) continue;
-      if (st.cfg.players[f.i]?.boss) continue;
-      let alpha = 1;
-      if (invisible && f.lastHitT > 60 && f.act !== A.SHIELD && f.act !== A.RESPAWN) alpha = 0.06 + (f.act === A.MOVE ? 0.12 : 0);
-      if (blackout) alpha *= 0.85;
-      this.drawRespawnPlatform(c, f);
-      // shadow on the ground
-      drawFighter(c, st, f, { palette: o.palettes[f.i] ?? 0, tint: tints[f.i], alpha, skel: skels[f.i] }, this.t);
-      // held item
-      if (f.item >= 0) {
-        const it = st.items.find((i) => i.id === f.item);
-        if (it) drawItem(c, it, this.t);
+    // grabbed fighters first (behind their grabber), then by index
+    for (let pass = 0; pass < 2; pass++) {
+      for (const f of st.fighters) {
+        if ((f.act === A.GRABBED) !== (pass === 0)) continue;
+        if (f.out || f.act === A.DEAD) continue;
+        if (st.cfg.players[f.i]?.boss) continue;
+        let alpha = 1;
+        if (invisible && f.lastHitT > 60 && f.act !== A.SHIELD && f.act !== A.RESPAWN) alpha = 0.06 + (f.act === A.MOVE ? 0.12 : 0);
+        if (blackout) alpha *= 0.85;
+        this.drawRespawnPlatform(c, f);
+        // shadow on the ground
+        drawFighter(c, st, f, { palette: o.palettes[f.i] ?? 0, tint: tints[f.i], alpha, skel: skels[f.i] }, this.t);
+        // held item
+        if (f.item >= 0) {
+          const it = st.items.find((i) => i.id === f.item);
+          if (it) drawItem(c, it, this.t);
+        }
+        if (isShielding(f)) {
+          const [sx, sy, sr] = shieldCircle(st, f, FIGHTERS[f.def]);
+          drawShield(c, sx, sy, sr, hexToRgb(tints[f.i] ?? '#9cf'), this.t);
+        }
+        if (f.ultReady && this.t % 6 < 3) {
+          c.strokeStyle = `hsla(${(this.t * 12) % 360},100%,65%,0.8)`;
+          c.lineWidth = 6;
+          c.beginPath();
+          c.arc(f.x, f.y - 60 * skels[f.i].scale, 80 * skels[f.i].scale, 0, Math.PI * 2);
+          c.stroke();
+        }
+        this.tag(c, st, f, o, skels[f.i].scale);
       }
-      if (isShielding(f)) {
-        const [sx, sy, sr] = shieldCircle(st, f, FIGHTERS[f.def]);
-        drawShield(c, sx, sy, sr, hexToRgb(tints[f.i] ?? '#9cf'), this.t);
-      }
-      if (f.ultReady && this.t % 6 < 3) {
-        c.strokeStyle = `hsla(${(this.t * 12) % 360},100%,65%,0.8)`;
-        c.lineWidth = 6;
-        c.beginPath();
-        c.arc(f.x, f.y - 60 * skels[f.i].scale, 80 * skels[f.i].scale, 0, Math.PI * 2);
-        c.stroke();
-      }
-      this.tag(c, st, f, o, skels[f.i].scale);
     }
     for (const p of st.projs) drawProj(c, p, this.t, tints);
     drawHazards(c, st, this.t, tints);
@@ -120,7 +148,7 @@ export class Renderer {
     if (o.boxes) this.drawBoxes(c, st);
     if (blackout) this.darkness(c, st);
     // screen space
-    c.setTransform(1, 0, 0, 1, 0, 0);
+    screenT(c);
     drawForeground(c, st, w, h, this.t, this.fx.cheer);
     if (this.fx.flash > 0) {
       c.fillStyle = rgba(this.fx.flashCol.startsWith('#') ? this.fx.flashCol : '#ffffff', this.fx.flash * 0.6);

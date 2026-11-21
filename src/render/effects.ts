@@ -2,7 +2,7 @@
 import { A } from '../sim/acts';
 import { FIGHTERS, STAGES } from '../sim/data';
 import type { Ev, State } from '../sim/types';
-import { circle, OUTLINE, rgba } from './art';
+import { circle, makeCanvas, OUTLINE, rgba } from './art';
 import type { Camera } from './camera';
 
 /** what a bro says after sending their bro into orbit */
@@ -52,6 +52,42 @@ interface P {
   text?: string;
   /** screen-space particles ignore the camera */
   screen?: boolean;
+  /** a speech bubble's wrapped lines and width, measured once */
+  lines?: string[];
+  bw?: number;
+}
+
+// the KO beam and explosions used fresh gradients every frame; they are sprites now, faded with globalAlpha (D22)
+const sprites = new Map<string, HTMLCanvasElement>();
+function fxSprite(key: string, w: number, h: number, paint: (g: CanvasRenderingContext2D) => void): HTMLCanvasElement {
+  let cv = sprites.get(key);
+  if (!cv) {
+    if (sprites.size > 40) sprites.clear();
+    cv = makeCanvas(w, h);
+    paint(cv.getContext('2d')!);
+    sprites.set(key, cv);
+  }
+  return cv;
+}
+function blastSprite(col: string): HTMLCanvasElement {
+  return fxSprite(`blast${col}`, 512, 64, (g) => {
+    const lg = g.createLinearGradient(0, 0, 512, 0);
+    lg.addColorStop(0, rgbaAny(col, 0.95));
+    lg.addColorStop(0.6, rgbaAny(col, 0.35));
+    lg.addColorStop(1, rgbaAny(col, 0));
+    g.fillStyle = lg;
+    g.fillRect(0, 0, 512, 64);
+  });
+}
+function boomSprite(): HTMLCanvasElement {
+  return fxSprite('boom', 256, 256, (g) => {
+    const rg = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+    rg.addColorStop(0, 'rgba(255,255,220,1)');
+    rg.addColorStop(0.4, 'rgba(255,170,60,0.9)');
+    rg.addColorStop(1, 'rgba(255,60,40,0)');
+    g.fillStyle = rg;
+    g.fillRect(0, 0, 256, 256);
+  });
 }
 
 export class Effects {
@@ -284,10 +320,15 @@ export class Effects {
     this.cheer = 1;
   }
 
+  /** advance every particle one 60 Hz tick (the renderer calls it on a fixed clock, not per drawn frame) */
   update(): void {
     for (const p of this.ps) {
       p.x += p.vx;
       p.y += p.vy;
+      if (p.screen) {
+        p.x += p.vx;
+        p.y += p.vy;
+      }
       if (p.k === 'spark') {
         p.vx *= 0.82;
         p.vy *= 0.82;
@@ -305,7 +346,9 @@ export class Effects {
       }
       p.life--;
     }
-    this.ps = this.ps.filter((p) => p.life > 0);
+    let n = 0;
+    for (const p of this.ps) if (p.life > 0) this.ps[n++] = p;
+    this.ps.length = n;
     this.flash = Math.max(0, this.flash - 0.04);
     this.cheer = Math.max(0, this.cheer - 0.006);
   }
@@ -376,18 +419,18 @@ export class Effects {
           c.rotate(p.rot);
           const len = 2600;
           const wd = 260 * (0.3 + t);
-          const g = c.createLinearGradient(0, 0, len, 0);
-          g.addColorStop(0, rgbaAny(p.col, 0.95 * t));
-          g.addColorStop(0.6, rgbaAny(p.col, 0.35 * t));
-          g.addColorStop(1, rgbaAny(p.col, 0));
-          c.fillStyle = g;
+          c.globalAlpha = t;
           c.beginPath();
           c.moveTo(0, -wd * 0.3);
           c.lineTo(len, -wd);
           c.lineTo(len, wd);
           c.lineTo(0, wd * 0.3);
           c.closePath();
-          c.fill();
+          c.save();
+          c.clip();
+          c.drawImage(blastSprite(p.col), 0, -wd, len, wd * 2);
+          c.restore();
+          c.globalAlpha = 1;
           c.fillStyle = `rgba(255,255,255,${0.9 * t})`;
           c.beginPath();
           c.moveTo(0, -wd * 0.08);
@@ -400,14 +443,9 @@ export class Effects {
         }
         case 'boom': {
           const r = p.size * (1.3 - t * 0.6);
-          const g = c.createRadialGradient(p.x, p.y, 0, p.x, p.y, r);
-          g.addColorStop(0, `rgba(255,255,220,${t})`);
-          g.addColorStop(0.4, `rgba(255,170,60,${0.9 * t})`);
-          g.addColorStop(1, 'rgba(255,60,40,0)');
-          c.fillStyle = g;
-          c.beginPath();
-          c.arc(p.x, p.y, r, 0, Math.PI * 2);
-          c.fill();
+          c.globalAlpha = t;
+          c.drawImage(boomSprite(), p.x - r, p.y - r, r * 2, r * 2);
+          c.globalAlpha = 1;
           break;
         }
         case 'confetti':
@@ -434,17 +472,22 @@ export class Effects {
           c.save();
           c.globalAlpha = Math.min(1, t * 4, (1 - t) * 10);
           c.font = '800 22px Nunito, sans-serif';
-          const words = (p.text ?? '').split(' ');
-          const lines: string[] = [];
-          let cur = '';
-          for (const w of words) {
-            if ((cur + ' ' + w).trim().length > 30) {
-              lines.push(cur.trim());
-              cur = w;
-            } else cur += ' ' + w;
+          if (!p.lines) {
+            const words = (p.text ?? '').split(' ');
+            const ls: string[] = [];
+            let cur = '';
+            for (const w of words) {
+              if ((cur + ' ' + w).trim().length > 30) {
+                ls.push(cur.trim());
+                cur = w;
+              } else cur += ' ' + w;
+            }
+            if (cur.trim()) ls.push(cur.trim());
+            p.lines = ls;
+            p.bw = Math.max(...ls.map((l) => c.measureText(l).width)) + 28;
           }
-          if (cur.trim()) lines.push(cur.trim());
-          const bw = Math.max(...lines.map((l) => c.measureText(l).width)) + 28;
+          const lines = p.lines;
+          const bw = p.bw ?? 100;
           const bh = lines.length * 26 + 18;
           const bx = p.x - bw / 2;
           const by = p.y - bh;
@@ -492,8 +535,6 @@ export class Effects {
       c.fillStyle = p.col;
       c.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
       c.restore();
-      p.x += p.vx;
-      p.y += p.vy;
     }
   }
 

@@ -72,8 +72,7 @@ export function drawFighterAt(c: CanvasRenderingContext2D, id: string, palette: 
   c.save();
   c.translate(x, baseline);
   c.scale(sc, sc);
-  if (silhouette) c.filter = 'brightness(0)';
-  drawFighter(c, st, f, { palette, tint: '#fff', still: true, skel: k }, t);
+  drawFighter(c, st, f, { palette, tint: '#fff', still: true, skel: k, silhouette }, t);
   c.restore();
 }
 
@@ -85,8 +84,9 @@ export function drawTile(c: CanvasRenderingContext2D, w: number, h: number, id: 
   const art = artFor(id);
   const pal = art.palettes[palette % art.palettes.length];
   const g = c.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, shade(cf.def.color, 0.15));
-  g.addColorStop(1, shade(cf.def.color, -0.55));
+  // locked tiles are drawn grey here (a CSS grayscale filter over a live canvas re-filtered it every update, D22)
+  g.addColorStop(0, locked ? '#4a4452' : shade(cf.def.color, 0.15));
+  g.addColorStop(1, locked ? '#16121c' : shade(cf.def.color, -0.55));
   c.fillStyle = g;
   c.fillRect(0, 0, w, h);
   c.globalAlpha = 0.15;

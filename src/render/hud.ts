@@ -4,7 +4,7 @@ import { fighterSkel } from '../sim/anim';
 import { FIGHTERS } from '../sim/data';
 import { INTRO_FRAMES } from '../sim/sim';
 import type { Fighter, State } from '../sim/types';
-import { circle, OUTLINE, rgba, rrect, shade } from './art';
+import { circle, makeCanvas, OUTLINE, rgba, rrect, screenT, shade } from './art';
 import type { Camera } from './camera';
 import { artFor } from './fighters';
 import { drawFighter } from './fighterDraw';
@@ -51,6 +51,26 @@ export function drawPortrait(c: CanvasRenderingContext2D, st: State | null, defI
   c.restore();
 }
 
+const portraitCache = new Map<string, HTMLCanvasElement>();
+/**
+ * The HUD's portraits, painted once per fighter, colour and size and then copied (D22): drawing a whole fighter
+ * into every card and off-screen bubble each frame was most of the HUD's cost.
+ */
+export function drawPortraitCached(c: CanvasRenderingContext2D, defIdx: number, palette: number, x: number, y: number, r: number): void {
+  const m = c.getTransform();
+  const s = Math.hypot(m.a, m.b);
+  const R = Math.max(4, Math.round(r * s));
+  const key = `${defIdx}|${palette}|${R}`;
+  let cv = portraitCache.get(key);
+  if (!cv) {
+    if (portraitCache.size > 64) portraitCache.clear();
+    cv = makeCanvas(R * 2, R * 2);
+    drawPortrait(cv.getContext('2d')!, null, defIdx, palette, R, R, R, 0);
+    portraitCache.set(key, cv);
+  }
+  c.drawImage(cv, x - r, y - r, r * 2, r * 2);
+}
+
 let dummyCache: State | null = null;
 function dummyState(): State {
   if (!dummyCache) {
@@ -91,7 +111,7 @@ function makeDummy(def: number): Fighter {
 }
 
 export function drawHud(c: CanvasRenderingContext2D, st: State, w: number, h: number, info: HudInfo, t: number, shakeP: number[]): void {
-  c.setTransform(1, 0, 0, 1, 0, 0);
+  screenT(c);
   if (info.hideHud) return;
   const players = st.fighters.filter((f) => !st.cfg.players[f.i]?.grunt && !st.cfg.players[f.i]?.boss);
   const n = players.length;
@@ -170,7 +190,7 @@ function drawCard(c: CanvasRenderingContext2D, st: State, f: Fighter, x: number,
   c.strokeStyle = OUTLINE;
   c.stroke();
   const r = h * 0.38;
-  drawPortrait(c, st, f.def, info.palettes[f.i] ?? 0, x + r + 10, y + h * 0.46, r, t);
+  drawPortraitCached(c, f.def, info.palettes[f.i] ?? 0, x + r + 10, y + h * 0.46, r);
   c.lineWidth = 3;
   c.strokeStyle = OUTLINE;
   c.beginPath();
@@ -263,7 +283,7 @@ export function bigText(c: CanvasRenderingContext2D, s: string, x: number, y: nu
 
 /** countdown, GO, GAME, ultimate banners */
 export function drawBanners(c: CanvasRenderingContext2D, st: State, w: number, h: number, t: number, ultName: (f: Fighter) => string): void {
-  c.setTransform(1, 0, 0, 1, 0, 0);
+  screenT(c);
   if (st.intro > 0) {
     const n = Math.ceil(st.intro / 60);
     const f = (st.intro % 60) / 60;
@@ -306,7 +326,7 @@ export function drawBanners(c: CanvasRenderingContext2D, st: State, w: number, h
 
 /** little bubbles at the screen edge for fighters out of view */
 export function drawOffscreen(c: CanvasRenderingContext2D, st: State, cam: Camera, w: number, h: number, tints: string[], palettes: number[], t: number): void {
-  c.setTransform(1, 0, 0, 1, 0, 0);
+  screenT(c);
   for (const f of st.fighters) {
     if (f.out || f.act === A.DEAD) continue;
     const [sx, sy] = cam.worldToScreen(f.x, f.y - 60, w, h);
@@ -316,7 +336,7 @@ export function drawOffscreen(c: CanvasRenderingContext2D, st: State, cam: Camer
     const by = Math.max(m, Math.min(h - m - 120, sy));
     const r = 34;
     circle(c, bx, by, r + 5, tints[f.i] ?? '#fff', OUTLINE, 4);
-    drawPortrait(c, st, f.def, palettes[f.i] ?? 0, bx, by, r, t);
+    drawPortraitCached(c, f.def, palettes[f.i] ?? 0, bx, by, r);
     // arrow toward the fighter
     const ang = Math.atan2(sy - by, sx - bx);
     c.fillStyle = tints[f.i] ?? '#fff';

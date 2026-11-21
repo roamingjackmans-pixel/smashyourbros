@@ -2,8 +2,9 @@
 import { canvasEl, inMatch, mainMenu, show, backToMenus } from '../app';
 import { session, save } from '../game/session';
 import { localMatch } from '../game/match';
+import { defaultDevice, deviceTapJump } from '../game/input';
 import { ROSTER } from '../sim/data';
-import { TASKS, taskFor } from '../data/tasks';
+import { checkTasks, TASKS, taskFor } from '../data/tasks';
 import { PLAYER_TINTS } from '../render/renderer';
 import { audio } from '../audio/audio';
 import { h, liveCanvas, toast } from './dom';
@@ -11,6 +12,8 @@ import { drawFighterAt, drawTile } from './portrait';
 import { buildCfg, defaultRules } from './rules';
 import { challengerSplash } from './results';
 import { pauseMenu } from './pause';
+import { recordMatch } from '../game/profile';
+import { announceAchievements } from './achievementsUi';
 
 let pending: string[] = [];
 
@@ -31,14 +34,16 @@ export function challengerFight(fighter: string, then: () => void): void {
   const p = session.profile;
   const mine = p.settings.palette[p.unlocked[0]] !== undefined ? p.unlocked[0] : 'kit';
   const fav = Object.entries(p.used).sort((a, b) => b[1] - a[1])[0]?.[0] ?? mine;
+  const dev = defaultDevice(0);
   const cfg = buildCfg({ ...defaultRules(), stocks: 1, items: 0, stage: 'studio' }, [
-    { fighter: p.unlocked.includes(fav) ? fav : 'kit', color: 0, team: 0, cpu: 0, name: session.user?.name ?? 'You', tapJump: p.settings.tapJumpKb },
+    { fighter: p.unlocked.includes(fav) ? fav : 'kit', color: 0, team: 0, cpu: 0, name: session.user?.name ?? 'You', tapJump: deviceTapJump(dev) },
     { fighter, color: 0, team: 1, cpu: 5, name: 'Challenger', tapJump: false },
   ]);
   inMatch();
-  const m = localMatch(canvasEl, cfg, [{ kind: 'kb', index: 0, tapJump: p.settings.tapJumpKb }, null], { names: [session.user?.name ?? 'You', 'Challenger'], tints: PLAYER_TINTS, palettes: [p.settings.palette[fav] ?? 0, 0], local: [true, false] }, {
+  const m = localMatch(canvasEl, cfg, [dev, null], { names: [session.user?.name ?? 'You', 'Challenger'], tints: PLAYER_TINTS, palettes: [p.settings.palette[fav] ?? 0, 0], local: [true, false] }, {
     onEnd: (st) => {
       backToMenus();
+      recordMatch(p, st, { mode: 'challenger', local: [0] });
       const won = st.winner.includes(0);
       const def = ROSTER.find((r) => r.def.id === fighter)?.def;
       if (won) {
@@ -47,6 +52,8 @@ export function challengerFight(fighter: string, then: () => void): void {
         save();
         audio.sfx('ultimate');
         toast(`${def?.name} joined your roster! “${def?.line}”`, 'gold', 6000);
+        checkTasks(p);
+        announceAchievements(p);
       } else toast(`${def?.name} got away. Rematch them any time from Contestants.`, 'bad', 5000);
       then();
     },
@@ -94,7 +101,7 @@ export function rosterScreen(selected?: string): void {
                   h('div', h('b', task?.title ?? 'Locked'), ` — ${task?.desc ?? ''}`),
                   task ? h('div.progress', h('div', { style: { width: `${Math.min(100, (task.progress(p) / task.goal) * 100)}%` } })) : '',
                   task ? h('div.small.dim', `${Math.min(task.goal, task.progress(p))} / ${task.goal}`) : '',
-                  challenger ? h('button.big.primary', { onclick: () => void challengerSplash(cur).then(() => challengerFight(cur, () => rosterScreen(cur))) }, 'Fight the challenger!') : '',
+                  challenger ? h('button.big.primary', { 'data-pad-start': true, onclick: () => void challengerSplash(cur).then(() => challengerFight(cur, () => rosterScreen(cur))) }, 'Fight the challenger!') : '',
                 )
               : h(
                   'div.col',
@@ -119,7 +126,7 @@ export function rosterScreen(selected?: string): void {
       for (const r of ROSTER) {
         const id = r.def.id;
         const locked = !p.unlocked.includes(id);
-        const tile = h(`div.rtile${locked ? '.locked' : ''}`, { style: { outline: id === cur ? '4px solid #fff' : '', cursor: 'pointer' } });
+        const tile = h(`div.rtile${locked ? '.locked' : ''}`, { tabindex: '0', role: 'button', 'data-id': id, style: { outline: id === cur ? '4px solid #fff' : '', cursor: 'pointer' } });
         const tcv = liveCanvas('tilecv', (c, w, hh, t) => drawTile(c, w, hh, id, 0, t, locked), 4);
         stops.push(tcv.stop);
         tile.append(tcv.el, h('div.nm', locked ? (p.challengers.includes(id) ? '! CHALLENGER' : '???') : r.def.name));
@@ -132,7 +139,7 @@ export function rosterScreen(selected?: string): void {
       }
     };
     const done = TASKS.filter((t) => p.unlocked.includes(t.fighter)).length;
-    root.appendChild(h('div.screen', h('div.topbar', h('button', { onclick: () => mainMenu() }, '◀ Back'), h('h2', 'Contestants'), h('span.chip', `${p.unlocked.length} / 16 unlocked · ${done} / ${TASKS.length} tasks`)), h('div.col', { style: { width: '100%', maxWidth: '1200px' } }, grid, detail)));
+    root.appendChild(h('div.screen', h('div.topbar', h('button', { 'data-back': true, onclick: () => mainMenu() }, '◀ Back'), h('h2', 'Contestants'), h('span.chip', `${p.unlocked.length} / 16 unlocked · ${done} / ${TASKS.length} tasks`)), h('div.col', { style: { width: '100%', maxWidth: '1200px' } }, grid, detail)));
     renderDetail();
     return () => stops.forEach((s) => s());
   });

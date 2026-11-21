@@ -3,11 +3,36 @@ import './ui/theme.css';
 import { audio } from './audio/audio';
 import { attachKeyboard, type Device } from './game/input';
 import { localMatch } from './game/match';
+import { fpsWanted, startOverlay } from './game/perf';
+import { onPadChange, padNumber, pollPads } from './game/pads';
+import { reconnectSteamControllers, watchSteamDisconnects } from './game/steamController';
 import { PLAYER_TINTS } from './render/renderer';
 import { FIGHTER_INDEX, ROSTER } from './sim/data';
 import type { MatchCfg } from './sim/types';
+import { toast } from './ui/dom';
+import { refreshGlyphs } from './ui/glyphs';
+import { attachMenuKeys, pollMenuPad } from './ui/menuPad';
+import './ui/controls.css';
 
 attachKeyboard();
+attachMenuKeys();
+if (fpsWanted()) startOverlay();
+
+// the input loop (D23): registered first, so every frame reads the pads before a match or a menu needs them
+const inputLoop = (now: number): void => {
+  requestAnimationFrame(inputLoop);
+  pollPads();
+  pollMenuPad(now);
+  refreshGlyphs(now);
+};
+requestAnimationFrame(inputLoop);
+onPadChange((p, on) => {
+  if (on) toast(`🎮 ${p.model} connected (pad ${padNumber(p.index)})`, 'ok', 2600);
+  else toast(`🎮 ${p.model} disconnected`, 'bad', 3200);
+  if (on) audio.sfx('select');
+});
+watchSteamDisconnects();
+void reconnectSteamControllers();
 const unlock = (): void => audio.unlock();
 window.addEventListener('pointerdown', unlock);
 window.addEventListener('keydown', unlock);

@@ -2,7 +2,7 @@
 import { STAGES } from '../sim/data';
 import { surfaces } from '../sim/stage';
 import type { State } from '../sim/types';
-import { circle, OUTLINE, rrect, shade } from './art';
+import { circle, getBaseScale, makeCanvas, OUTLINE, rrect, screenT, shade } from './art';
 import type { Camera } from './camera';
 
 function rnd(i: number): number {
@@ -12,9 +12,53 @@ function rnd(i: number): number {
 
 // ------------------------------------------------------------------ backgrounds
 
+// Full-screen gradients were re-shaded every frame (about 20× a flat fill on an integrated GPU, D22). The parts of
+// each sky that never move are painted once per screen size into a cached layer and copied; moving gradient shapes
+// (spotlight beams, the planet) are cached sprites drawn with a transform.
+const layerCache = new Map<string, HTMLCanvasElement>();
+function cachedLayer(c: CanvasRenderingContext2D, key: string, w: number, h: number, paint: (g: CanvasRenderingContext2D) => void): void {
+  const s = getBaseScale(c);
+  const W = Math.max(1, Math.ceil(w * s));
+  const H = Math.max(1, Math.ceil(h * s));
+  const k = `${key}:${W}x${H}`;
+  let cv = layerCache.get(k);
+  if (!cv) {
+    if (layerCache.size > 8) layerCache.clear();
+    cv = makeCanvas(W, H);
+    const g = cv.getContext('2d')!;
+    g.scale(s, s);
+    paint(g);
+    layerCache.set(k, cv);
+  }
+  c.save();
+  c.setTransform(1, 0, 0, 1, 0, 0);
+  c.drawImage(cv, 0, 0);
+  c.restore();
+}
+
+const spriteCache = new Map<string, HTMLCanvasElement>();
+/** a cached sprite of size w × h (logical pixels, drawn at up to 2 device pixels each) */
+function sprite(key: string, w: number, h: number, paint: (g: CanvasRenderingContext2D, w: number, h: number) => void): HTMLCanvasElement {
+  let cv = spriteCache.get(key);
+  if (!cv) {
+    if (spriteCache.size > 40) spriteCache.clear();
+    cv = makeCanvas(w, h);
+    paint(cv.getContext('2d')!, w, h);
+    spriteCache.set(key, cv);
+  }
+  return cv;
+}
+
+function vGradient(g: CanvasRenderingContext2D, w: number, h: number, stops: [number, string][]): void {
+  const lg = g.createLinearGradient(0, 0, 0, h);
+  for (const [o, col] of stops) lg.addColorStop(o, col);
+  g.fillStyle = lg;
+  g.fillRect(0, 0, w, h);
+}
+
 export function drawBackground(c: CanvasRenderingContext2D, st: State, cam: Camera, w: number, h: number, t: number, blackout: boolean): void {
   const bg = STAGES[st.stage].bg;
-  c.setTransform(1, 0, 0, 1, 0, 0);
+  screenT(c);
   if (blackout) {
     c.fillStyle = '#05030a';
     c.fillRect(0, 0, w, h);
@@ -32,12 +76,13 @@ export function drawBackground(c: CanvasRenderingContext2D, st: State, cam: Came
 type PX = (f: number) => number;
 
 function studioBg(c: CanvasRenderingContext2D, w: number, h: number, t: number, px: PX, py: PX, z: number): void {
-  const g = c.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#1a0630');
-  g.addColorStop(0.6, '#3a0d4f');
-  g.addColorStop(1, '#14041f');
-  c.fillStyle = g;
-  c.fillRect(0, 0, w, h);
+  cachedLayer(c, 'studio', w, h, (g) =>
+    vGradient(g, w, h, [
+      [0, '#1a0630'],
+      [0.6, '#3a0d4f'],
+      [1, '#14041f'],
+    ]),
+  );
   const s = z * 0.5;
   // big LED screen
   const sx = px(0.15);
@@ -88,33 +133,37 @@ function studioBg(c: CanvasRenderingContext2D, w: number, h: number, t: number, 
   for (let i = 0; i < 4; i++) {
     const bx = w * (0.15 + i * 0.23);
     const ang = Math.sin(t * 0.012 + i * 1.7) * 0.5;
+    const col = ['255,207,58', '255,58,110', '90,200,255', '190,120,255'][i];
+    const beam = sprite(`beam${i}`, 160, 256, (g, sw, sh) => {
+      const lg = g.createLinearGradient(0, 0, 0, sh);
+      lg.addColorStop(0, `rgba(${col},0.32)`);
+      lg.addColorStop(1, `rgba(${col},0)`);
+      g.fillStyle = lg;
+      g.beginPath();
+      g.moveTo(sw / 2 - 6, 0);
+      g.lineTo(sw / 2 + 6, 0);
+      g.lineTo(sw, sh);
+      g.lineTo(0, sh);
+      g.closePath();
+      g.fill();
+    });
     c.save();
     c.translate(bx, -20);
     c.rotate(ang);
-    const lg = c.createLinearGradient(0, 0, 0, h * 1.1);
-    const col = ['255,207,58', '255,58,110', '90,200,255', '190,120,255'][i];
-    lg.addColorStop(0, `rgba(${col},0.32)`);
-    lg.addColorStop(1, `rgba(${col},0)`);
-    c.fillStyle = lg;
-    c.beginPath();
-    c.moveTo(-12, 0);
-    c.lineTo(12, 0);
-    c.lineTo(160, h * 1.1);
-    c.lineTo(-160, h * 1.1);
-    c.closePath();
-    c.fill();
+    c.drawImage(beam, -160, 0, 320, h * 1.1);
     c.restore();
   }
   c.globalCompositeOperation = 'source-over';
 }
 
 function roofBg(c: CanvasRenderingContext2D, w: number, h: number, t: number, px: PX, py: PX, z: number): void {
-  const g = c.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#060824');
-  g.addColorStop(0.55, '#2a1350');
-  g.addColorStop(1, '#ff3a8c');
-  c.fillStyle = g;
-  c.fillRect(0, 0, w, h);
+  cachedLayer(c, 'roof', w, h, (g) =>
+    vGradient(g, w, h, [
+      [0, '#060824'],
+      [0.55, '#2a1350'],
+      [1, '#ff3a8c'],
+    ]),
+  );
   // moon and stars
   circle(c, px(0.03) + w * 0.25, py(0.03) - h * 0.15, 70 * Math.max(0.6, z), '#ffe9c2', null, 0);
   for (let i = 0; i < 70; i++) {
@@ -161,14 +210,15 @@ function roofBg(c: CanvasRenderingContext2D, w: number, h: number, t: number, px
 }
 
 function seaBg(c: CanvasRenderingContext2D, w: number, h: number, t: number, px: PX, py: PX, z: number): void {
-  const g = c.createLinearGradient(0, 0, 0, h);
-  g.addColorStop(0, '#ff8a5a');
-  g.addColorStop(0.45, '#ffcf7a');
-  g.addColorStop(0.62, '#ffd9a6');
-  g.addColorStop(0.63, '#2a8fb8');
-  g.addColorStop(1, '#0d3b66');
-  c.fillStyle = g;
-  c.fillRect(0, 0, w, h);
+  cachedLayer(c, 'sea', w, h, (g) =>
+    vGradient(g, w, h, [
+      [0, '#ff8a5a'],
+      [0.45, '#ffcf7a'],
+      [0.62, '#ffd9a6'],
+      [0.63, '#2a8fb8'],
+      [1, '#0d3b66'],
+    ]),
+  );
   // sun
   const sunY = py(0.05) + 60 * z;
   circle(c, px(0.05) - 260 * z, sunY, 120 * Math.max(0.7, z), '#fff1c2', null, 0);
@@ -207,15 +257,17 @@ function seaBg(c: CanvasRenderingContext2D, w: number, h: number, t: number, px:
 }
 
 function spaceBg(c: CanvasRenderingContext2D, w: number, h: number, t: number, px: PX, py: PX, z: number): void {
-  c.fillStyle = '#070418';
-  c.fillRect(0, 0, w, h);
-  // nebula
-  const ng = c.createRadialGradient(w * 0.7, h * 0.3, 10, w * 0.7, h * 0.3, w * 0.6);
-  ng.addColorStop(0, 'rgba(255,90,200,0.35)');
-  ng.addColorStop(0.5, 'rgba(90,60,255,0.18)');
-  ng.addColorStop(1, 'rgba(0,0,0,0)');
-  c.fillStyle = ng;
-  c.fillRect(0, 0, w, h);
+  cachedLayer(c, 'space', w, h, (g) => {
+    g.fillStyle = '#070418';
+    g.fillRect(0, 0, w, h);
+    // nebula
+    const ng = g.createRadialGradient(w * 0.7, h * 0.3, 10, w * 0.7, h * 0.3, w * 0.6);
+    ng.addColorStop(0, 'rgba(255,90,200,0.35)');
+    ng.addColorStop(0.5, 'rgba(90,60,255,0.18)');
+    ng.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = ng;
+    g.fillRect(0, 0, w, h);
+  });
   for (let i = 0; i < 160; i++) {
     const sx = (rnd(i) * w * 1.4 + px(0.02) * 0.5) % w;
     const sy = (rnd(i + 300) * h * 1.2 + py(0.02) * 0.3) % h;
@@ -228,14 +280,18 @@ function spaceBg(c: CanvasRenderingContext2D, w: number, h: number, t: number, p
   const R = 1400 * Math.max(0.35, z);
   const cx = px(0.08);
   const cy = py(0.08) + R * 0.95 + 300 * z;
-  const pg = c.createRadialGradient(cx - R * 0.3, cy - R * 0.5, R * 0.2, cx, cy, R);
-  pg.addColorStop(0, '#ffb3e6');
-  pg.addColorStop(0.6, '#b45cff');
-  pg.addColorStop(1, '#3b1a7a');
-  c.fillStyle = pg;
-  c.beginPath();
-  c.arc(cx, cy, R, 0, Math.PI * 2);
-  c.fill();
+  const planet = sprite('planet', 1024, 1024, (g, sw) => {
+    const r0 = sw / 2;
+    const pg = g.createRadialGradient(r0 - r0 * 0.3, r0 - r0 * 0.5, r0 * 0.2, r0, r0, r0);
+    pg.addColorStop(0, '#ffb3e6');
+    pg.addColorStop(0.6, '#b45cff');
+    pg.addColorStop(1, '#3b1a7a');
+    g.fillStyle = pg;
+    g.beginPath();
+    g.arc(r0, r0, r0, 0, Math.PI * 2);
+    g.fill();
+  });
+  c.drawImage(planet, cx - R, cy - R, R * 2, R * 2);
   c.strokeStyle = 'rgba(255,255,255,0.2)';
   c.lineWidth = 18 * z;
   for (let i = 0; i < 4; i++) {
@@ -415,7 +471,7 @@ export function drawStage(c: CanvasRenderingContext2D, st: State, t: number, bla
 export function drawForeground(c: CanvasRenderingContext2D, st: State, w: number, h: number, t: number, cheer: number): void {
   const bg = STAGES[st.stage].bg;
   if (bg !== 'studio') return;
-  c.setTransform(1, 0, 0, 1, 0, 0);
+  screenT(c);
   const n = Math.ceil(w / 46) + 2;
   for (let i = 0; i < n; i++) {
     const bounce = Math.abs(Math.sin(t * 0.08 + i * 0.7)) * (4 + cheer * 14);

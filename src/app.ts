@@ -6,9 +6,26 @@ import { session, saveNow, signOut, startOffline, startOnline } from './game/ses
 import { checkTasks } from './data/tasks';
 import { GAME_VERSION } from './version';
 import { audio } from './audio/audio';
-import { menuPress } from './game/input';
+import { KEYMAPS, lastInputKind } from './game/input';
+import { lastActivePad, nintendoLabelsOn } from './game/pads';
+import { catchUpAchievements, statsPanel, trophiesScreen } from './ui/achievementsUi';
 import { clear, h, modal, toast, uiRoot } from './ui/dom';
 import { startAttract, stopAttract } from './ui/attract';
+import { setGlyphSource } from './ui/glyphs';
+import { setMenuButtons } from './ui/menuPad';
+import { hintBar } from './ui/glyphs';
+
+// button prompts and the menu buttons read the signed-in profile's settings (D23)
+setGlyphSource({
+  prompts: () => session.profile.settings.prompts,
+  device: () => lastInputKind(),
+  padKind: () => lastActivePad()?.kind ?? 'xbox',
+  layout: () => session.profile.settings.pads[0],
+  menuPad: () => session.profile.settings.menuPad,
+  keys: () => KEYMAPS[0].keys,
+  nintendoLabels: () => nintendoLabelsOn(),
+});
+setMenuButtons(() => session.profile.settings.menuPad);
 
 export let canvasEl: HTMLCanvasElement;
 let cleanup: (() => void) | null = null;
@@ -56,6 +73,7 @@ export async function boot(canvas: HTMLCanvasElement): Promise<void> {
 
 function afterSignIn(join: string | null): void {
   checkTasks(session.profile);
+  catchUpAchievements(session.profile);
   if (session.online) void connectFriends();
   if (join) {
     void import('./ui/onlineUi').then((m) => m.onlineScreen(join));
@@ -86,7 +104,7 @@ async function connectFriends(): Promise<void> {
           { style: { width: 'min(420px, 88vw)' } },
           h('h2', '🥊 Bro invite!'),
           h('div', h('b', m.fromName), ` wants you in their lobby (${m.code}). They said you looked great. (They didn’t, but they meant it.)`),
-          h('div.row', h('button.primary', { onclick: () => (close(), void import('./ui/onlineUi').then((x) => x.onlineScreen(m.code))) }, 'Join'), h('button', { onclick: () => close() }, 'Not now')),
+          h('div.row', h('button.primary', { onclick: () => (close(), void import('./ui/onlineUi').then((x) => x.onlineScreen(m.code))) }, 'Join'), h('button', { 'data-back': true, onclick: () => close() }, 'Not now')),
         ),
       );
       audio.sfx('select');
@@ -176,12 +194,14 @@ export function mainMenu(): void {
       ['t-classic', '🏆', 'CLASSIC', 'Eight rounds and the host. Pick a fighter and an intensity.', 'classic', () => void import('./ui/classicUi').then((m) => m.classicScreen())],
       ['t-roster', '🃏', 'CONTESTANTS', `${p.unlocked.length} / 16 bros. Bro cards, move lists and unlock tasks.${p.challengers.length ? ` ${p.challengers.length} challenger${p.challengers.length > 1 ? 's' : ''} waiting!` : ''}`, 'roster', () => void import('./ui/roster').then((m) => m.rosterScreen())],
       ['t-practice', '🎯', 'PRACTICE', 'A training dummy, hitboxes on, no pressure.', 'practice', () => void import('./ui/versus').then((m) => m.practiceScreen())],
-      ['t-settings', '⚙️', 'SETTINGS', 'Controls, sound, account.', 'settings', () => void import('./ui/settings').then((m) => m.settingsScreen())],
+      ['t-trophies', '🏅', 'TROPHIES', 'Stats, achievements and unlock tasks. See how much you love your bros, in numbers.', 'trophies', () => trophiesScreen()],
+      ['t-settings', '⚙️', 'SETTINGS', 'Controllers, remapping, graphics, sound, account.', 'settings', () => void import('./ui/settings').then((m) => m.settingsScreen())],
     ];
     const grid = h('div.menu-grid');
+    const panel = statsPanel(() => (audio.sfx('select'), trophiesScreen('stats')));
     const els: HTMLElement[] = [];
     for (const [cls, ico, title, blurb, , fn] of tiles) {
-      const el = h(`div.tile.${cls.split(' ').join('.')}`, h('div.ico', ico), h('h3', title), h('p', blurb));
+      const el = h(`div.tile.${cls.split(' ').join('.')}`, { tabindex: '0', role: 'button' }, h('div.ico', ico), h('h3', title), h('p', blurb));
       el.addEventListener('click', () => {
         audio.unlock();
         audio.sfx('select');
@@ -205,38 +225,15 @@ export function mainMenu(): void {
         userbar,
         h('div.logo', { style: { marginTop: '2vh', fontSize: 'clamp(40px, 7vw, 92px)' } }, 'SMASH ', h('span', 'YOUR'), ' BROS'),
         h('div.tagline', 'LIVE! from the Studio Starship'),
-        grid,
-        h('div.tiny.dim', { style: { marginTop: '14px' } }, `v${GAME_VERSION} · ${session.online ? 'Saved to your account' : 'Offline save'} · Gamepad: stick + A to pick`),
+        h('div.home', grid, panel),
+        h('div', { style: { marginTop: '12px' } }, hintBar([['move', 'Move'], ['menuConfirm', 'Select'], ['menuBack', 'Back']], 18)),
+        h('div.tiny.dim', { style: { marginTop: '8px' } }, `v${GAME_VERSION} · ${session.online ? 'Saved to your account' : 'Offline save'}`),
       ),
     );
-    // gamepad / arrow navigation of the tiles
-    let focus = 0;
-    const paint = (): void => els.forEach((e, i) => e.classList.toggle('focus', i === focus));
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.code === 'ArrowRight') focus = (focus + 1) % els.length;
-      else if (e.code === 'ArrowLeft') focus = (focus - 1 + els.length) % els.length;
-      else if (e.code === 'ArrowDown') focus = Math.min(els.length - 1, focus + 3);
-      else if (e.code === 'ArrowUp') focus = Math.max(0, focus - 3);
-      else if (e.code === 'Enter') return els[focus].click();
-      else return;
-      paint();
-      audio.sfx('menu');
-    };
-    window.addEventListener('keydown', onKey);
-    const iv = setInterval(() => {
-      const m = menuPress();
-      if (!m) return;
-      if (m === 'right') focus = (focus + 1) % els.length;
-      if (m === 'left') focus = (focus - 1 + els.length) % els.length;
-      if (m === 'down') focus = Math.min(els.length - 1, focus + 3);
-      if (m === 'up') focus = Math.max(0, focus - 3);
-      if (m === 'ok') els[focus].click();
-      paint();
-    }, 60);
-    return () => {
-      window.removeEventListener('keydown', onKey);
-      clearInterval(iv);
-    };
+    // the tiles are focusable: the pad / arrow keys move the shared menu focus (ui/menuPad.ts)
+    els[0]?.setAttribute('data-autofocus', '');
+    if (lastInputKind() === 'pad' || document.body.classList.contains('pad-nav')) setTimeout(() => els[0]?.focus(), 0);
+    return () => (panel as HTMLElement & { stop?: () => void }).stop?.();
   });
 }
 

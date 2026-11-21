@@ -12,7 +12,7 @@ export function pauseMenu(resume: () => void, quit: () => void, practice = false
       { style: { width: 'min(640px, 94vw)', alignItems: 'stretch' } },
       h('h2.center', 'PAUSED'),
       h('div.center.dim', 'Take a breather, bro. Hydrate.'),
-      h('button.big.primary', { onclick: () => done(resume) }, 'Resume'),
+      h('button.big.primary', { 'data-pad-start': true, onclick: () => done(resume) }, 'Resume'),
       h('button.big', { onclick: () => done(quit) }, practice ? 'Leave practice' : 'Quit match'),
       h('details', h('summary', { style: { cursor: 'pointer', fontWeight: '900' } }, 'Controls'), controlsHelp()),
     ),

@@ -3,6 +3,7 @@
 import { A } from '../sim/acts';
 import { STAGES } from '../sim/data';
 import type { State } from '../sim/types';
+import { screenT } from './art';
 
 export class Camera {
   x = 0;
@@ -88,7 +89,7 @@ export class Camera {
     const z = this.zoom * (1 + this.punch * 0.9);
     const cx = this.x + (this.punchX - this.x) * this.punch;
     const cy = this.y + (this.punchY - this.y) * this.punch;
-    c.setTransform(1, 0, 0, 1, 0, 0);
+    screenT(c);
     c.translate(w / 2 + this.shakeX, h / 2 + this.shakeY);
     if (this.rot) c.rotate(this.rot);
     c.scale(z, z);

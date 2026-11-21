@@ -8,6 +8,7 @@ import { artFor } from '../render/fighters';
 import { shade } from '../render/art';
 import { audio } from '../audio/audio';
 import { h, liveCanvas, uiRoot } from './dom';
+import { announceAchievements } from './achievementsUi';
 import { drawFighterAt } from './portrait';
 
 export interface ResultsInfo {
@@ -37,6 +38,7 @@ export function resultsScreen(info: ResultsInfo): { newTasks: Task[]; close: () 
   if (!info.noRecord) {
     recordMatch(session.profile, st, info.ctx);
     newTasks = checkTasks(session.profile);
+    announceAchievements(session.profile);
     save();
   }
   const root = uiRoot();
@@ -121,7 +123,7 @@ export function resultsScreen(info: ResultsInfo): { newTasks: Task[]; close: () 
       h('div.col', h('div.panel.winner-stage', { style: { padding: '0', overflow: 'hidden' } }, stage.el), h('div.quote.center', `“${line}”`)),
       h('div.col', h('div.panel', table), h('div.panel', taskBox)),
     ),
-    h('div.row.wrap', { style: { marginTop: '16px', justifyContent: 'center' } }, info.actions.map((a) => h(`button.big${a.cls ? `.${a.cls}` : ''}`, { onclick: () => (close(), a.fn()) }, a.label))),
+    h('div.row.wrap', { style: { marginTop: '16px', justifyContent: 'center' } }, info.actions.map((a, i) => h(`button.big${a.cls ? `.${a.cls}` : ''}`, { 'data-autofocus': i === 0, 'data-pad-start': i === 0, onclick: () => (close(), a.fn()) }, a.label))),
   );
   root.replaceChildren(el);
   audio.say(failed ? 'So close!' : `${(info.names[w0] || wdef?.name || '').replace(/^CPU.*/, wdef?.name ?? '')} wins!`, 1);
@@ -142,7 +144,7 @@ export function challengerSplash(fighter: string): Promise<void> {
     });
     cv.el.style.width = '320px';
     cv.el.style.height = '320px';
-    const el = h('div.challenger', h('div.col', { style: { alignItems: 'center' } }, h('h1', 'A NEW CONTESTANT APPEARS!'), cv.el, h('div.display', { style: { fontSize: '28px', color: 'var(--gold)' } }, def?.name ?? fighter), h('div.quote', `“${def?.line ?? ''}”`), h('button.big.primary', { onclick: () => done() }, 'Bring it, bro')));
+    const el = h('div.challenger', h('div.col', { style: { alignItems: 'center' } }, h('h1', 'A NEW CONTESTANT APPEARS!'), cv.el, h('div.display', { style: { fontSize: '28px', color: 'var(--gold)' } }, def?.name ?? fighter), h('div.quote', `“${def?.line ?? ''}”`), h('button.big.primary', { 'data-pad-start': true, 'data-autofocus': true, onclick: () => done() }, 'Bring it, bro')));
     document.body.appendChild(el);
     audio.sfx('ultimate');
     audio.say('A new contestant appears!', 1);

@@ -22,9 +22,19 @@ function ledFace(c: CanvasRenderingContext2D, v: FView, cx: number, cy: number, 
   c.fillStyle = col;
   c.lineCap = 'round';
   c.lineJoin = 'round';
+  // the glow: a wide faint pass under the crisp one (shadowBlur was a per-stroke blur, slow with a stage full of
+  // stagehands, D22)
+  const a = c.globalAlpha;
+  c.globalAlpha = a * 0.3;
+  c.lineWidth = 7;
+  ledStrokes(c, v, cx, cy, w);
+  c.globalAlpha = a;
   c.lineWidth = 2.6;
-  c.shadowColor = col;
-  c.shadowBlur = 6;
+  ledStrokes(c, v, cx, cy, w);
+  c.restore();
+}
+
+function ledStrokes(c: CanvasRenderingContext2D, v: FView, cx: number, cy: number, w: number): void {
   const ex = w * 0.26;
   const e = v.expr;
   for (const s of [-1, 1]) {
@@ -76,7 +86,6 @@ function ledFace(c: CanvasRenderingContext2D, v: FView, cx: number, cy: number, 
     c.quadraticCurveTo(cx + 2, my + 3, cx + 7, my - 1);
   }
   c.stroke();
-  c.restore();
 }
 
 registerProjDraw('shTape', (c, p, r, t) => {

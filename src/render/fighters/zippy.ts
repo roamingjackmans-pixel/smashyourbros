@@ -128,8 +128,14 @@ function drawTail(c: CanvasRenderingContext2D, v: FView): void {
   if (charged(v) || moveId(v) === 'dspec' || moveId(v) === 'dspecAir') {
     c.save();
     c.globalCompositeOperation = 'lighter';
-    c.shadowColor = p.accent;
-    c.shadowBlur = 16;
+    // a soft glow from two wide strokes (shadowBlur blurred it every frame, D22)
+    c.lineJoin = 'round';
+    c.strokeStyle = rgba(p.accent, 0.16);
+    c.lineWidth = 22;
+    c.stroke();
+    c.strokeStyle = rgba(p.accent, 0.22);
+    c.lineWidth = 11;
+    c.stroke();
     c.fillStyle = rgba(p.accent, 0.4);
     c.fill();
     c.restore();

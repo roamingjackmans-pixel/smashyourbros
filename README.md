@@ -8,7 +8,7 @@ pile of lobby modifiers, a story campaign and a Classic ladder. Up to four playe
 The whole show is a very sincere bromance: everyone hypes, compliments and flirts with their bros, then smashes
 them into the stratosphere.
 
-**Play:** https://josephjackman.com/games/smashyourbros/ (keyboard, or up to four gamepads on one machine)
+**Play:** https://josephjackman.com/games/smashyourbros/ (keyboard, or up to four controllers on one machine: Xbox, PlayStation, Switch Pro / Joy-Con, 8BitDo and other pads, a Steam Controller)
 
 ## The show
 
@@ -25,7 +25,7 @@ Open from the start: **Kit Cadet** (all-rounder), **Sir Clank** (swordfighter), 
 fighter has done: **Echo** (rewinds time), **Inverta** (flips gravity, walks on the underside of the stage),
 **Smudge** (paints the floor), **Tempo** (hits on the beat hit harder). Details: `docs/ROSTER.md`.
 
-## Controls (defaults; rebind in Settings)
+## Controls (defaults; rebind in Settings → Controls, per player)
 
 | | Keyboard | Gamepad |
 |---|---|---|
@@ -41,11 +41,17 @@ fighter has done: **Echo** (rewinds time), **Inverta** (flips gravity, walks on 
 Smash attacks: tap a direction and Attack together (or the smash stick); hold to charge. Shield right as a hit
 lands to parry. Press shield just before you hit the floor while tumbling to tech.
 
+Controllers drive every menu (D-pad / stick to move, A to choose, B to go back, Start for the main action, LB / RB
+for tabs). On the character picker each new pad joins with A or Start and picks with its own cursor. Settings →
+Controls remaps every button per player (P1–P4), the right stick (smash / tilt / specials / off), the deadzone and
+tap jump; Settings → Controllers sets the button pictures, the menu buttons, rumble and Nintendo-style A/B.
+Button prompts show your controller's own buttons. Add `?fps` to the address for a frame-time overlay.
+
 ## Modes
 
 Smash (local, 2–4 bros, any mix of CPUs) · Online lobbies (4-digit codes, friends, invites; versus or story
 co-op) · Story ("Prime-Time Brawl", co-op) · Classic (8 rounds + the host, intensity 1–9) · Contestants (bro
-cards and unlock tasks) · Practice. Match modes: Stock, Time, Stamina, Coin Battle, King of the Hill, 2v2 teams.
+cards and unlock tasks) · Practice · Trophies (lifetime stats, 47 achievements, the unlock tasks). Match modes: Stock, Time, Stamina, Coin Battle, King of the Hill, 2v2 teams.
 Modifiers: low/heavy gravity, ice, wind, bouncy walls, turbo, giants, tiny, glass cannons, invisible, body swap,
 mirror match, rising lava, shrinking arena, meteors, topsy-turvy, blackout, item rain, bounty, hot potato,
 sudden ultimates, Live Studio Audience.

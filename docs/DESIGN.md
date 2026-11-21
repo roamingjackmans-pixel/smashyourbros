@@ -20,9 +20,12 @@ src/render/    canvas renderer: camera, rig drawing, per-fighter art (render/fig
                HUD. Reads state; never writes it.
 src/audio/     synthesized sfx, music sequencer, announcer.
 src/net/       accounts (Shoallhell API), socket, lobby, rollback session, transport (relay + WebRTC).
-src/game/      the match runner (local and online), input devices.
-src/ui/        DOM menus: sign-in, main menu, character select, rules, lobby/friends, story, classic, tasks,
-               settings, results.
+src/game/      the match runner (local and online), input: keyboards (input.ts), every gamepad (pads.ts), per-port
+               controller layouts (padLayout.ts), the Steam Controller over WebHID, the per-match stats tracker
+               (stats.ts), the save (profile.ts), the frame-time overlay (perf.ts).
+src/ui/        DOM menus: sign-in, main menu (+ stats panel), character select, rules, lobby/friends, story, classic,
+               trophies (achievements, tasks, statistics), settings, results; button prompts (glyphs.ts) and pad
+               navigation of every menu (menuPad.ts).
 ```
 
 ## 2. Simulation conventions (read before writing a fighter)
@@ -33,6 +36,11 @@ src/ui/        DOM menus: sign-in, main menu, character select, rules, lobby/fri
 - **Inputs:** stick `x`,`y` in −100..100 with **y positive = up** (stick convention), buttons bitmask
   `ATTACK SPECIAL JUMP SHIELD GRAB TAUNT`, and a `c` (smash stick) direction. Packed into one int
   (`sim/input.ts`) for the network.
+- **Controllers (D23):** `readDevice()` turns a keyboard map or a pad into that one int. Pads are read once per
+  frame into the standard layout (0 A/✕/B·Nintendo-A, 1 B, 2 X, 3 Y, 4 LB, 5 RB, 6 LT, 7 RT, 8 View, 9 Start, 10/11
+  stick clicks, 12–15 D-pad, 16 Guide) whatever the brand; non-standard pads are normalised. Layouts are per player
+  port (P1–P4, in the profile): two buttons per action, right stick = smash / tilt / specials / off, deadzone, tap
+  jump. A `Device` names its port. Nothing pad-specific ever reaches the sim.
 - **Smash vs tilt:** a fresh stick flick (from <30 to ≥80 within 4 frames) + Attack = smash; held direction +
   Attack = tilt; the smash stick (gamepad right stick / keyboard smash key + direction) always smashes on the
   ground and does aerials in the air. Hold Attack during a smash to charge (up to 60 frames, ×1.4 damage).
@@ -107,10 +115,26 @@ frames of prediction, inputs re-sent with redundancy; transport = WebRTC data ch
 (signalled through the server) with the server relay as fallback. CPU bros are simulated identically on every
 machine. A player who drops for >8 s can be replaced by a CPU at an agreed frame.
 
-## 5. Presentation
+## 5. Menus and controllers
+
+Every screen must be drivable by pad and keyboard (`ui/menuPad.ts`): clickable non-buttons get `tabindex="0"`
+(and `role="button"`), the screen's Back / Close button `data-back` (B, Escape), its main action
+`data-pad-start` (Start), a secondary one `data-pad-view` (View); tabs are `.tabs [data-tab]` (LB / RB); a
+control that wants X / Y listens for `pad-x` / `pad-y`. A screen with its own pad logic (the picker's per-player
+cursors) uses `setPadHandler`. Button prompts come from `ui/glyphs.ts` (`glyphEl`, `hintBar`,
+`{action}` templates) so they follow the device in use and the current bindings. Text entry (email, password,
+names) is the one keyboard-only thing; codes have an on-screen number pad.
+
+## 6. Presentation
 
 Bold vector cartoon: thick dark outlines, flat colour with one shade, squash and stretch, big readable
 silhouettes. Hit sparks per element, hitlag shake, screen shake, launch smoke trails, the coloured KO blast at
 the blast zone, slow-motion zoom on the game-winning hit, off-screen magnifier bubbles, the percent shaking and
 heating from white to deep red. Synthesized sfx, a sequencer for stage music, an announcer (speech synthesis,
 optional).
+
+Performance rules (D22): no canvas `filter` or `shadowBlur` in anything drawn per frame (tint through
+`drawWashed`'s colour wash, glow with wide faint strokes); no full-screen gradient re-shaded per frame (cache the
+layer or a sprite); reset to screen space with `screenT(c)`, never `setTransform(1,0,0,1,0,0)` (the backing store
+is scaled by the adaptive resolution); effects and animation advance on the 60 Hz clock, not per drawn frame; the
+match draws only when the sim advanced. Check with `?fps`.

@@ -410,7 +410,6 @@ select:focus {
 }
 .rtile.locked {
   cursor: help;
-  filter: grayscale(1) brightness(0.45);
 }
 .rtile.locked::after {
   content: '?';
@@ -876,4 +875,154 @@ table.stats td.best {
 }
 .ingame > * {
   pointer-events: auto;
+}
+
+/* ---------- home: menu tiles + the stats panel (D24) */
+.home {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+  max-width: 1380px;
+  align-items: flex-start;
+  margin-top: 24px;
+}
+.home .menu-grid {
+  margin-top: 0;
+  flex: 2.4;
+  max-width: none;
+}
+.t-trophies {
+  background: linear-gradient(135deg, #ffcf3a, #c77a12);
+}
+.stats-panel {
+  flex: 1;
+  min-width: 270px;
+  max-width: 360px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  cursor: pointer;
+  padding: 14px;
+}
+.stats-panel:hover {
+  filter: brightness(1.08);
+}
+.stats-panel h3 {
+  font-size: 19px;
+}
+.stats-panel .fav {
+  gap: 10px;
+}
+.stats-panel .fav-cv {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 3px solid var(--ol);
+  background: #2a1240;
+  flex: none;
+}
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+.stat-cell {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  padding: 5px 6px;
+  text-align: center;
+}
+.stat-cell .v {
+  font-family: Bungee, Impact, sans-serif;
+  font-size: 16px;
+  color: var(--gold);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stat-cell .l {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--dim);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.dots {
+  display: flex;
+  gap: 4px;
+}
+.dots .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 2px solid var(--ol);
+}
+.dots .dot.w {
+  background: var(--good);
+}
+.dots .dot.l {
+  background: #6a5a7a;
+}
+.ok {
+  color: var(--good);
+  font-weight: 900;
+}
+@media (max-width: 1000px) {
+  .home {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .stats-panel {
+    max-width: none;
+  }
+}
+
+/* ---------- trophies */
+.ach-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 10px;
+}
+.ach-card {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  background: var(--panel);
+  border: 3px solid var(--ol);
+  border-radius: 16px;
+  padding: 10px 12px;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+  opacity: 0.86;
+}
+.ach-card.got {
+  opacity: 1;
+  border-color: var(--gold);
+  background: linear-gradient(135deg, rgba(255, 207, 58, 0.18), var(--panel) 60%);
+}
+.ach-ico {
+  font-size: 30px;
+  width: 46px;
+  height: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+  flex: none;
+}
+.ach-card:not(.got) .ach-ico {
+  filter: grayscale(0.85);
+}
+.stats-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+table.stats.lifetime td:first-child {
+  text-align: left;
+  color: var(--dim);
+}
+table.stats.lifetime td:last-child {
+  text-align: right;
+  font-weight: 900;
 }

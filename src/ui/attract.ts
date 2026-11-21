@@ -25,7 +25,7 @@ export function startAttract(canvas: HTMLCanvasElement): void {
     friendlyFire: false,
     players: Array.from({ length: n }, (_, i) => ({ fighter: pick(), color: i, team: i, cpu: 5 + Math.floor(Math.random() * 4), name: '', tapJump: false })),
   };
-  const m = localMatch(canvas, cfg, cfg.players.map(() => null), { names: [], tints: PLAYER_TINTS, palettes: cfg.players.map(() => Math.floor(Math.random() * 8)), local: [], hideHud: true }, {
+  const m = localMatch(canvas, cfg, cfg.players.map(() => null), { names: [], tints: PLAYER_TINTS, palettes: cfg.players.map(() => Math.floor(Math.random() * 8)), local: [], hideHud: true, backdrop: true }, {
     onEnd: () => {
       current = null;
       setTimeout(() => startAttract(canvas), 50);

@@ -121,7 +121,7 @@ export function buildCfg(r: Rules, players: PlayerCfg[], seed = Math.floor(Math.
 /** the rules editor (a modal); calls onChange on every edit */
 export function rulesModal(r: Rules, onChange: () => void, editable = true): void {
   const body = h('div.col');
-  const close = modal(h('div.col', { style: { width: 'min(860px, 92vw)' } }, h('div.row', h('h2.grow', 'Rules'), h('button', { onclick: () => close() }, 'Done')), body), { wide: true, onClose: onChange });
+  const close = modal(h('div.col', { style: { width: 'min(860px, 92vw)' } }, h('div.row', h('h2.grow', 'Rules'), h('button', { 'data-back': true, onclick: () => close() }, 'Done')), body), { wide: true, onClose: onChange });
   const render = (): void => {
     body.replaceChildren();
     const seg = <T extends string | number | boolean>(label: string, opts: [T, string][], get: () => T, set: (v: T) => void): HTMLElement =>
@@ -172,6 +172,9 @@ export function rulesModal(r: Rules, onChange: () => void, editable = true): voi
                 'div.mods',
                 g.mods.map((m) =>
                   h(`div.mod${r.mods.includes(m.id) ? '.on' : ''}`, {
+                    tabindex: '0',
+                    role: 'button',
+                    'data-mod': m.id,
                     title: m.blurb,
                     onclick: () => {
                       if (!editable) return;
@@ -205,7 +208,7 @@ export function stagePicker(r: Rules, onChange: () => void, editable = true): HT
     const opts = [...STAGES.map((s) => s.id), 'random'];
     for (const id of opts) {
       const stg = STAGES.find((s) => s.id === id);
-      const card = h(`div.stage-card${r.stage === id ? '.on' : ''}`);
+      const card = h(`div.stage-card${r.stage === id ? '.on' : ''}`, { tabindex: '0', role: 'button', 'data-stage': id });
       if (stg) {
         const preview = stagePreview(id, r.flat);
         stops.push(preview.stop);

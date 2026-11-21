@@ -2,13 +2,16 @@
 // render of its pick. Used by local versus, online lobbies, Classic and Story.
 import { ROSTER } from '../sim/data';
 import { taskFor } from '../data/tasks';
-import { pads, type Device } from '../game/input';
+import { keyboardIdleMs, padLayout, pads, type Device } from '../game/input';
+import { getPad, onPadChange, padNumber, type PadState } from '../game/pads';
 import { artFor } from '../render/fighters';
 import { PLAYER_TINTS, TEAM_TINTS } from '../render/renderer';
 import { shade } from '../render/art';
 import { audio } from '../audio/audio';
 import { clear, h, liveCanvas, toast } from './dom';
 import { drawFighterAt, drawTile } from './portrait';
+import { setPadHandler, type PadEvent } from './menuPad';
+import { hintBar } from './glyphs';
 
 export interface SlotPick {
   kind: 'human' | 'cpu' | 'off';
@@ -38,12 +41,21 @@ export interface PickerOpts {
   /** slot currently picking from the grid */
   active: number;
   maxSlots?: number;
+  /** pads may join by pressing A / Start (local play) */
+  join?: boolean;
 }
 
 export function deviceLabel(d: Device | null): string {
   if (!d) return '—';
   if (d.kind === 'kb') return d.index === 0 ? '⌨ WASD' : '⌨ Arrows';
-  return `🎮 Pad ${d.index + 1}`;
+  const p = getPad(d.index);
+  return p ? `🎮 ${p.model} ${padNumber(d.index)}` : `🎮 Pad ${d.index + 1} (unplugged)`;
+}
+
+/** a pad's cursor on the roster grid (each local player picks with their own), or "menu mode" (the shared focus) */
+interface Cursor {
+  tile: number;
+  menu: boolean;
 }
 
 export function deviceOptions(): Device[] {
@@ -60,6 +72,7 @@ export class Picker {
   private slotsEl: HTMLElement;
   private stops: (() => void)[] = [];
   private t = 0;
+  private cursors = new Map<number, Cursor>();
 
   constructor(
     public slots: SlotPick[],
@@ -67,9 +80,158 @@ export class Picker {
   ) {
     this.grid = h('div.roster');
     this.slotsEl = h('div.slots');
-    this.el = h('div.css-wrap', this.grid, this.slotsEl);
+    const hints = hintBar(
+      o.join === false
+        ? [
+            ['move', 'Move'],
+            ['menuConfirm', 'Pick'],
+            ['menuX', 'Colour'],
+            ['menuView', 'Menu'],
+          ]
+        : [
+            ['move', 'Move'],
+            ['menuConfirm', 'Pick / join'],
+            ['menuX', 'Colour'],
+            ['menuBack', 'Leave / back'],
+            ['menuView', 'Menu'],
+            ['menuStart', 'Fight!'],
+          ],
+      18,
+    );
+    this.el = h('div.css-wrap', this.grid, this.slotsEl, h('div.picker-hints', hints));
     this.buildGrid();
     this.renderSlots();
+    if (o.devices) {
+      this.stops.push(setPadHandler((ev, pad) => this.onPad(ev, pad)));
+      this.stops.push(onPadChange(() => this.renderSlots()));
+    }
+  }
+
+  // ------------------------------------------------------------------ pads (D23)
+
+  /** the slot a pad plays in */
+  private slotOf(pad: number): number {
+    return this.slots.findIndex((s, i) => s.kind === 'human' && s.device?.kind === 'pad' && s.device.index === pad && this.o.editable(i));
+  }
+
+  private tiles(): HTMLElement[] {
+    return Array.from(this.grid.querySelectorAll<HTMLElement>('.rtile'));
+  }
+
+  /** a pad presses A / Start without a slot: it takes the first free one */
+  private join(pad: PadState): number {
+    if (this.o.join === false) return -1;
+    const max = this.o.maxSlots ?? 4;
+    const kbIdle = keyboardIdleMs() > 15000;
+    const ok = (i: number): boolean => i < max && this.o.editable(i);
+    let j = this.slots.findIndex((s, i) => ok(i) && s.kind === 'human' && (!s.device || (s.device.kind === 'kb' && kbIdle) || (s.device.kind === 'pad' && !getPad(s.device.index))));
+    if (j < 0) j = this.slots.findIndex((s, i) => ok(i) && this.o.canSwitchKind(i) && s.kind === 'off');
+    if (j < 0) j = this.slots.findIndex((s, i) => ok(i) && this.o.canSwitchKind(i) && s.kind === 'cpu');
+    if (j < 0) {
+      toast('Every slot is taken, bro. Four is a party.', 'bad');
+      return -1;
+    }
+    const s = this.slots[j];
+    s.kind = 'human';
+    s.device = { kind: 'pad', index: pad.index, port: j, tapJump: padLayout(j).tapJump };
+    if (!s.name || /^(CPU|P\d)/.test(s.name)) s.name = `P${j + 1}`;
+    s.ready = false;
+    this.o.active = j;
+    const ti = ROSTER.findIndex((r) => r.def.id === s.fighter);
+    this.cursors.set(pad.index, { tile: Math.max(0, ti), menu: false });
+    audio.sfx('select');
+    toast(`P${j + 1} joined with ${pad.model} ${padNumber(pad.index)}. Welcome to the show, bro!`);
+    this.renderSlots();
+    this.o.onChange();
+    return j;
+  }
+
+  private onPad(ev: PadEvent, pad: PadState): boolean {
+    const si = this.slotOf(pad.index);
+    if (si < 0) {
+      if (ev === 'confirm' || ev === 'start') return this.join(pad) >= 0;
+      return false;
+    }
+    let cur = this.cursors.get(pad.index);
+    if (!cur) {
+      const ti = ROSTER.findIndex((r) => r.def.id === this.slots[si].fighter);
+      cur = { tile: Math.max(0, ti), menu: false };
+      this.cursors.set(pad.index, cur);
+      this.markTags();
+    }
+    if (cur.menu) {
+      // the shared focus (Rules, CPUs, devices, the top bar); View or Back returns to the grid
+      if (ev === 'view' || ev === 'back') {
+        cur.menu = false;
+        (document.activeElement as HTMLElement | null)?.blur?.();
+        this.markTags();
+        return true;
+      }
+      return false;
+    }
+    const tiles = this.tiles();
+    switch (ev) {
+      case 'up':
+      case 'down':
+      case 'left':
+      case 'right': {
+        const tops = tiles.map((t) => t.offsetTop);
+        const cols = Math.max(1, tops.filter((y) => y === tops[0]).length);
+        const n = tiles.length;
+        let i = cur.tile;
+        if (ev === 'left') i = i % cols === 0 ? Math.min(n - 1, i + cols - 1) : i - 1;
+        else if (ev === 'right') i = i % cols === cols - 1 || i === n - 1 ? i - (i % cols) : i + 1;
+        else if (ev === 'up') i = i - cols >= 0 ? i - cols : Math.min(n - 1, i + cols * Math.floor((n - 1 - i) / cols));
+        else i = i + cols < n ? i + cols : i % cols;
+        cur.tile = i;
+        this.o.active = si;
+        audio.sfx('menu');
+        this.markTags();
+        this.paintActive();
+        return true;
+      }
+      case 'confirm': {
+        const tile = tiles[cur.tile];
+        if (!tile) return true;
+        this.o.active = si;
+        tile.click();
+        return true;
+      }
+      case 'x':
+      case 'y':
+        this.palette(si, ev === 'x' ? -1 : 1);
+        return true;
+      case 'back': {
+        // the first player backs out of the screen; anyone else leaves their slot
+        const lead = this.slots.findIndex((s, i) => s.kind === 'human' && this.o.editable(i));
+        if (si === lead || !this.o.canSwitchKind(si) || this.o.join === false) return false;
+        const s = this.slots[si];
+        s.kind = 'off';
+        s.device = null;
+        this.cursors.delete(pad.index);
+        audio.sfx('back');
+        this.renderSlots();
+        this.o.onChange();
+        return true;
+      }
+      case 'view': {
+        cur.menu = true;
+        this.markTags();
+        const first = this.slotsEl.children[si]?.querySelector<HTMLElement>('button, select');
+        (first ?? this.el.closest('.screen')?.querySelector<HTMLElement>('.topbar button'))?.focus();
+        document.body.classList.add('pad-nav');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** outline the slot that's picking */
+  private paintActive(): void {
+    Array.from(this.slotsEl.children).forEach((el, i) => {
+      if (!(el instanceof HTMLElement) || el.classList.contains('off')) return;
+      el.style.outline = this.o.active === i && this.o.editable(i) ? '4px solid #fff' : '';
+    });
   }
 
   destroy(): void {
@@ -83,7 +245,7 @@ export class Picker {
       const id = r.def.id;
       const locked = !this.o.unlocked.includes(id);
       const tags = h('div.tags');
-      const tile = h(`div.rtile${locked ? '.locked' : ''}`, { title: locked ? `Locked: ${taskFor(id)?.desc ?? 'keep playing'}` : `${r.def.name} — ${r.def.role}` });
+      const tile = h(`div.rtile${locked ? '.locked' : ''}`, { tabindex: '0', role: 'button', title: locked ? `Locked: ${taskFor(id)?.desc ?? 'keep playing'}` : `${r.def.name} — ${r.def.role}` });
       const cv = liveCanvas('tilecv', (c, w, hh) => drawTile(c, w, hh, id, 0, this.t, locked), 4);
       this.stops.push(cv.stop);
       tile.append(cv.el, tags, h('div.nm', locked ? '???' : r.def.name));
@@ -98,7 +260,7 @@ export class Picker {
       this.grid.appendChild(tile);
     }
     // random
-    const rnd = h('div.rtile', { title: 'Random' }, h('div', { style: { position: 'absolute', inset: '0', display: 'grid', placeItems: 'center', fontFamily: 'Bungee', fontSize: '40px', background: 'linear-gradient(135deg,#ff3a6e,#3a8dff)' } }, '?'), h('div.nm', 'Random'));
+    const rnd = h('div.rtile', { tabindex: '0', role: 'button', title: 'Random' }, h('div', { style: { position: 'absolute', inset: '0', display: 'grid', placeItems: 'center', fontFamily: 'Bungee', fontSize: '40px', background: 'linear-gradient(135deg,#ff3a6e,#3a8dff)' } }, '?'), h('div.nm', 'Random'));
     rnd.addEventListener('click', () => {
       const pool = ROSTER.filter((r) => this.o.unlocked.includes(r.def.id));
       this.pick(pool[Math.floor(Math.random() * pool.length)].def.id, true);
@@ -114,15 +276,27 @@ export class Picker {
   }
 
   private markTags(): void {
-    for (const tile of Array.from(this.grid.querySelectorAll<HTMLElement>('.rtile'))) {
+    const tiles = this.tiles();
+    tiles.forEach((tile, ti) => {
       const tags = tile.querySelector('.tags');
-      if (!tags) continue;
+      if (!tags) return;
       clear(tags as HTMLElement);
       this.slots.forEach((s, i) => {
         if (s.kind === 'off' || s.fighter !== tile.dataset.id) return;
         tags.appendChild(h('span', { style: { background: slotTint(s, i, this.o.teams) } }, s.kind === 'cpu' ? 'C' : String(i + 1)));
       });
-    }
+      // each pad player's own cursor
+      for (const el of Array.from(tile.querySelectorAll('.pcur'))) el.remove();
+      for (const [pad, c] of this.cursors) {
+        if (c.menu || c.tile !== ti) continue;
+        const si = this.slotOf(pad);
+        if (si < 0) continue;
+        const tint = slotTint(this.slots[si], si, this.o.teams);
+        tile.appendChild(h('div.pcur', { style: { borderColor: tint } }, h('b', { style: { background: tint } }, `P${si + 1}`)));
+      }
+    });
+    // forget the cursors of pads that left their slot
+    for (const pad of [...this.cursors.keys()]) if (this.slotOf(pad) < 0) this.cursors.delete(pad);
   }
 
   pick(id: string, random = false): void {
@@ -161,6 +335,8 @@ export class Picker {
       const el = h('div.slot.off', h('div.who', `P${i + 1}`), h('div.grow', { style: { display: 'grid', placeItems: 'center', fontWeight: '900', color: 'var(--dim)' } }, this.o.canSwitchKind(i) ? 'Click to add a CPU' : 'Empty'));
       if (this.o.canSwitchKind(i)) {
         el.style.cursor = 'pointer';
+        el.tabIndex = 0;
+        el.setAttribute('role', 'button');
         el.addEventListener('click', () => {
           s.kind = 'cpu';
           s.cpu = s.cpu || 5;
@@ -215,7 +391,9 @@ export class Picker {
         const sel = h('select', { style: { padding: '2px 4px', fontSize: '12px' } }) as HTMLSelectElement;
         opts.forEach((d, k) => sel.appendChild(h('option', { value: String(k), ...(s.device && d.kind === s.device.kind && d.index === s.device.index ? { selected: true } : {}) }, deviceLabel(d))));
         sel.addEventListener('change', () => {
-          s.device = opts[Number(sel.value)];
+          const d = opts[Number(sel.value)];
+          s.device = { ...d, port: i, tapJump: d.kind === 'pad' ? padLayout(i).tapJump : d.tapJump };
+          this.renderSlots();
           this.o.onChange();
         });
         ctrl.append(sel);
@@ -228,7 +406,7 @@ export class Picker {
               title: 'Human / CPU / off',
               onclick: () => {
                 s.kind = s.kind === 'human' ? 'cpu' : s.kind === 'cpu' ? 'off' : 'human';
-                if (s.kind === 'human' && !s.device) s.device = deviceOptions()[Math.min(i, deviceOptions().length - 1)];
+                if (s.kind === 'human' && !s.device) s.device = { ...deviceOptions()[Math.min(i, deviceOptions().length - 1)], port: i };
                 this.renderSlots();
                 this.o.onChange();
               },

@@ -3,7 +3,7 @@
 import { canvasEl, inMatch, mainMenu, show, backToMenus } from '../app';
 import { session } from '../game/session';
 import { Match } from '../game/match';
-import type { Device } from '../game/input';
+import { defaultDevice, deviceTapJump, type Device } from '../game/input';
 import { api, type FriendsView } from '../net/api';
 import { Net, type RoomView } from '../net/socket';
 import { OnlineDriver } from '../net/online';
@@ -12,7 +12,7 @@ import { FIGHTER_INDEX, FIGHTERS } from '../sim/data';
 import type { MatchCfg, State } from '../sim/types';
 import { PLAYER_TINTS, TEAM_TINTS } from '../render/renderer';
 import { audio } from '../audio/audio';
-import { h, modal, toast } from './dom';
+import { h, keypad, modal, toast } from './dom';
 import { deviceOptions, Picker, type SlotPick } from './picker';
 import { buildCfg, defaultRules, rulesModal, rulesSummary, stagePicker, type Rules } from './rules';
 import { resultsScreen } from './results';
@@ -56,7 +56,7 @@ interface StartMsg {
 let lobby: LobbyState | null = null;
 let net: Net | null = null;
 let offs: (() => void)[] = [];
-let myDevice: Device = { kind: 'kb', index: 0, tapJump: false };
+let myDevice: Device | null = null;
 
 function me(): string {
   return session.user?.id ?? '';
@@ -70,7 +70,7 @@ export async function onlineScreen(joinCode?: string, activity?: 'story'): Promi
     return;
   }
   show((root) => {
-    root.appendChild(h('div.screen', h('div.topbar', h('button', { onclick: () => mainMenu() }, '◀ Back'), h('h2', 'Online')), h('div.panel', 'Connecting to the studio…')));
+    root.appendChild(h('div.screen', h('div.topbar', h('button', { 'data-back': true, onclick: () => mainMenu() }, '◀ Back'), h('h2', 'Online')), h('div.panel', 'Connecting to the studio…')));
   });
   try {
     net = await Net.shared();
@@ -90,16 +90,17 @@ function homeScreen(activity?: 'story'): void {
     root.appendChild(
       h(
         'div.screen',
-        h('div.topbar', h('button', { onclick: () => mainMenu() }, '◀ Back'), h('h2', 'Online')),
+        h('div.topbar', h('button', { 'data-back': true, onclick: () => mainMenu() }, '◀ Back'), h('h2', 'Online')),
         h(
           'div.rules',
           h(
             'div.panel.col',
             h('h3', 'Start a lobby'),
             h('div.dim', 'Up to 4 bros. You set the rules; friends join with your code, an invite, or from their friends list.'),
-            h('button.big.primary', { onclick: () => void createLobby(activity) }, activity === 'story' ? 'Create a story co-op lobby' : 'Create lobby'),
+            h('button.big.primary', { 'data-pad-start': true, onclick: () => void createLobby(activity) }, activity === 'story' ? 'Create a story co-op lobby' : 'Create lobby'),
             h('h3', { style: { marginTop: '14px' } }, 'Join with a code'),
             h('div.row', code, h('button.big.gold', { onclick: () => void joinLobby(code.value.trim()) }, 'Join')),
+            keypad(code, () => void joinLobby(code.value.trim())),
           ),
           h('div.panel.col', h('div.row', h('h3.grow', 'Friends'), h('button.tiny', { onclick: () => friendsModal() }, 'Manage')), friendsBox),
         ),
@@ -137,7 +138,7 @@ function friendRows(v: FriendsView, inLobby: boolean, close?: () => void): HTMLE
 
 export function friendsModal(): void {
   const body = h('div.col');
-  const close = modal(h('div.col', { style: { width: 'min(520px, 90vw)' } }, h('div.row', h('h2.grow', '👥 Bros'), h('button', { onclick: () => close() }, 'Close')), body));
+  const close = modal(h('div.col', { style: { width: 'min(520px, 90vw)' } }, h('div.row', h('h2.grow', '👥 Bros'), h('button', { 'data-back': true, onclick: () => close() }, 'Close')), body));
   const render = async (): Promise<void> => {
     let v: FriendsView;
     try {
@@ -169,6 +170,7 @@ export function friendsModal(): void {
           'Add bro',
         ),
       ),
+      keypad(code),
       v.incoming.length ? h('h3', 'Requests') : '',
       ...v.incoming.map((f) => h('div.card.row', h('b.grow', f.name), h('button.tiny.primary', { onclick: () => void api.acceptFriend(f.id).then(() => render()) }, 'Accept'), h('button.tiny', { onclick: () => void api.removeFriend(f.id).then(() => render()) }, 'Decline'))),
       h('h3', `Friends (${v.friends.length})`),
@@ -319,7 +321,7 @@ function lobbyScreen(): void {
       stageEl?.stop?.();
       // slots: humans (lobby order) then CPUs
       const slots: SlotPick[] = [
-        ...L.players.map((p) => ({ kind: 'human' as const, fighter: p.fighter, palette: p.palette, cpu: 0, team: p.team, device: p.userId === me() ? myDevice : null, name: p.name, userId: p.userId, ready: p.ready, remote: p.userId !== me() })),
+        ...L.players.map((p) => ({ kind: 'human' as const, fighter: p.fighter, palette: p.palette, cpu: 0, team: p.team, device: p.userId === me() ? (myDevice ??= defaultDevice(0)) : null, name: p.name, userId: p.userId, ready: p.ready, remote: p.userId !== me() })),
         ...L.cpus.map((c) => ({ kind: 'cpu' as const, fighter: c.fighter, palette: c.palette, cpu: c.cpu, team: c.team, device: null, name: 'CPU' })),
       ];
       while (slots.length < 4) slots.push({ kind: 'off', fighter: 'kit', palette: slots.length, cpu: 5, team: slots.length % 2, device: null, name: '' });
@@ -330,6 +332,7 @@ function lobbyScreen(): void {
         editable: (i) => (slots[i].userId === me() ? true : host && slots[i].kind !== 'human'),
         canSwitchKind: (i) => host && slots[i].kind !== 'human' && !story,
         devices: true,
+        join: false,
         active: Math.max(0, slots.findIndex((s) => s.userId === me())),
         onChange: () => {
           // write back what this machine may edit
@@ -353,12 +356,12 @@ function lobbyScreen(): void {
       const allReady = L.players.every((p) => p.ready || p.userId === L.host);
       const enough = L.players.length + L.cpus.length >= 2 || story;
       header.replaceChildren(
-        h('button', { onclick: () => leaveLobby() }, '✕ Leave'),
+        h('button', { 'data-back': true, onclick: () => leaveLobby() }, '✕ Leave'),
         h('h2', host ? 'Your lobby' : 'Lobby'),
         h('span.chip', 'Code ', h('b.code', { style: { fontSize: '22px', letterSpacing: '3px' } }, L.code)),
         h('button.tiny', { onclick: () => friendsModal() }, '👥 Invite'),
         host
-          ? h('button.big.primary', { disabled: !allReady || !enough, title: allReady ? '' : 'Waiting for everyone to ready up', onclick: () => hostStart() }, story ? 'Roll camera ▶' : 'START ▶')
+          ? h('button.big.primary', { 'data-pad-start': true, disabled: !allReady || !enough, title: allReady ? '' : 'Waiting for everyone to ready up', onclick: () => hostStart() }, story ? 'Roll camera ▶' : 'START ▶')
           : h(`button.big${mine?.ready ? '.teal' : '.primary'}`, { onclick: () => net?.guestSend({ t: 'ready', v: !mine?.ready }) }, mine?.ready ? 'READY ✔' : 'Ready up'),
       );
       const nodeTitle = story ? (nodeById(L.node ?? '')?.title ?? '—') : '';
@@ -367,7 +370,7 @@ function lobbyScreen(): void {
         h('div.seg', h(`button${!story ? '.on' : ''}`, { disabled: !host, onclick: () => ((L.activity = 'versus'), broadcast(), render()) }, 'Versus'), h(`button${story ? '.on' : ''}`, { disabled: !host, onclick: () => ((L.activity = 'story'), (L.node = L.node ?? nextNode(session.profile.story.cleared)?.id), (L.cpus = []), broadcast(), render()) }, 'Story co-op')),
         story ? h('span.chip', `📺 ${nodeTitle}`) : h('span.chip', rulesSummary(L.rules)),
         story && host ? h('button.tiny', { onclick: () => pickNode(L, render) }, 'Change segment') : '',
-        !story ? h('button.gold', { onclick: () => rulesModal(L.rules, () => (broadcast(), render()), host) }, host ? 'Rules' : 'See rules') : '',
+        !story ? h('button.gold', { 'data-pad-view': true, onclick: () => rulesModal(L.rules, () => (broadcast(), render()), host) }, host ? 'Rules' : 'See rules') : '',
         h('span.small.dim.grow', host ? 'Everyone readies up, then you start. Click empty slots to add CPUs.' : 'Pick your bro and ready up. The host starts the match.'),
       );
       body.replaceChildren(info, picker.el);
@@ -435,8 +438,8 @@ function startOnlineMatch(m: StartMsg): void {
     inGame = false;
     return;
   }
-  const dev = myDevice ?? deviceOptions()[0];
-  dev.tapJump = dev.kind === 'pad' ? session.profile.settings.tapJumpPad : session.profile.settings.tapJumpKb;
+  const dev: Device = { ...(myDevice ?? defaultDevice(0)), port: 0 };
+  dev.tapJump = deviceTapJump(dev);
   m.cfg.players[local].tapJump = dev.tapJump;
   inMatch();
   const driver = new OnlineDriver(net, { cfg: m.cfg, slots: m.slots, me: me(), host: isHost(), delay: m.delay, names: m.names }, dev);

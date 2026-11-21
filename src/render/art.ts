@@ -54,6 +54,34 @@ export interface ArtDef {
 export const OUTLINE = '#1b0f24';
 export const RAD = Math.PI / 180;
 
+// ------------------------------------------------------------------ screen space
+
+/**
+ * The match canvas draws in logical pixels (the canvas's CSS size × device pixel ratio, as before) while its
+ * backing store can be smaller (adaptive resolution, D22). The base scale maps logical → backing pixels; every
+ * "reset to screen space" goes through screenT so the HUD keeps its size whatever the resolution.
+ */
+const baseScale = new WeakMap<CanvasRenderingContext2D, number>();
+export function setBaseScale(c: CanvasRenderingContext2D, s: number): void {
+  baseScale.set(c, s);
+}
+export function getBaseScale(c: CanvasRenderingContext2D): number {
+  return baseScale.get(c) ?? 1;
+}
+/** reset the transform to screen space (logical pixels) */
+export function screenT(c: CanvasRenderingContext2D): void {
+  const s = baseScale.get(c) ?? 1;
+  c.setTransform(s, 0, 0, s, 0, 0);
+}
+
+/** a reusable offscreen canvas (grown, never shrunk) for layers and caches */
+export function makeCanvas(w: number, h: number): HTMLCanvasElement {
+  const el = document.createElement('canvas');
+  el.width = Math.max(1, Math.ceil(w));
+  el.height = Math.max(1, Math.ceil(h));
+  return el;
+}
+
 // ------------------------------------------------------------------ colour helpers
 
 export function shade(hex: string, amt: number): string {
