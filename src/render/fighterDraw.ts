@@ -1,0 +1,167 @@
+// Draws one fighter from its skeleton and its ArtDef.
+import { A } from '../sim/acts';
+import { fighterSkel } from '../sim/anim';
+import { FIGHTERS } from '../sim/data';
+import type { Fighter, RigDef, Skel, State } from '../sim/types';
+import { boneFrame, circle, fillStroke, fist, limb, OUTLINE, rrect, shade, shoe, type ArtDef, type FView, type Palette } from './art';
+import { artFor } from './fighters';
+
+export interface DrawOpts {
+  palette: number;
+  /** team / player colour for tags and shields */
+  tint: string;
+  alpha?: number;
+  /** skip the hitlag shake etc. (menus) */
+  still?: boolean;
+  skel?: Skel;
+}
+
+export function expressionOf(f: Fighter): FView['expr'] {
+  switch (f.act) {
+    case A.HITSTUN:
+    case A.DIZZY:
+    case A.GRABBED:
+    case A.TRAPPED:
+    case A.FROZEN:
+      return 'hurt';
+    case A.DOWN:
+      return f.af < 20 ? 'hurt' : 'normal';
+    case A.TAUNT:
+    case A.RESPAWN:
+      return 'happy';
+    case A.MOVE:
+    case A.HOLD:
+    case A.SHIELD:
+      return 'angry';
+    case A.DASH:
+    case A.RUN:
+    case A.HELPLESS:
+      return 'focus';
+  }
+  return 'normal';
+}
+
+export function fighterView(st: State, f: Fighter, k: Skel, p: Palette, t: number): FView {
+  return {
+    st,
+    f,
+    k,
+    p,
+    t,
+    expr: expressionOf(f),
+    blink: (t + f.i * 37) % 200 < 7,
+    flash: f.hitlag > 0 && f.hurtFx > 0 ? 1 : 0,
+    ol: OUTLINE,
+  };
+}
+
+/** default torso: a rounded body capsule along the spine */
+export function defaultTorso(c: CanvasRenderingContext2D, v: FView, rig: RigDef, fill: string, belt?: string): void {
+  boneFrame(c, v, v.k.hip, v.k.ang.torso);
+  const L = rig.torso;
+  const g = rig.girth;
+  rrect(c, -g, -L - g * 0.35, g * 2, L + g * 0.8, g * 0.95);
+  fillStroke(c, fill, v.ol, 3.2);
+  // shade on the back half
+  c.save();
+  c.clip();
+  c.fillStyle = shade(fill, -0.18);
+  c.fillRect(-g * 1.2, -L - g, g * 0.7, L + g * 2);
+  c.restore();
+  if (belt) {
+    c.fillStyle = belt;
+    c.fillRect(-g + 1, -g * 0.15, g * 2 - 2, g * 0.45);
+    c.strokeStyle = v.ol;
+    c.lineWidth = 2;
+    c.strokeRect(-g + 1, -g * 0.15, g * 2 - 2, g * 0.45);
+  }
+  c.restore();
+}
+
+export function drawFighter(c: CanvasRenderingContext2D, st: State, f: Fighter, o: DrawOpts, t: number): Skel {
+  const cf = FIGHTERS[f.def];
+  const art = artFor(cf.def.id);
+  const k = o.skel ?? fighterSkel(st, f, cf);
+  const p = art.palettes[o.palette % art.palettes.length];
+  const v = fighterView(st, f, k, p, t);
+  const rig = cf.def.rig;
+  const s = k.scale;
+  const olw = 3.2 * s;
+  c.save();
+  // hitlag shake for the one who got hit
+  if (!o.still && f.hitlag > 0 && f.lSpd > 0) c.translate(((t % 2) * 2 - 1) * 3.5 * s, 0);
+  let alpha = o.alpha ?? 1;
+  if (!o.still && f.invinc > 0 && f.act !== A.RESPAWN) alpha *= 0.55 + 0.45 * (t % 8 < 4 ? 1 : 0);
+  c.globalAlpha = alpha;
+  if (v.flash > 0) c.filter = 'brightness(2.4) saturate(0.4)';
+  else if (f.starT > 0) c.filter = `hue-rotate(${(t * 18) % 360}deg) saturate(1.6) brightness(1.15)`;
+  else if (f.frozenT > 0) c.filter = 'saturate(0.3) brightness(1.3) hue-rotate(170deg)';
+
+  drawBody(c, v, art, rig, s, olw);
+
+  c.restore();
+  return k;
+}
+
+function drawBody(c: CanvasRenderingContext2D, v: FView, art: ArtDef, rig: RigDef, s: number, olw: number): void {
+  const k = v.k;
+  const p = v.p;
+  const w = art.limb * s;
+  const ua = art.upperArm?.(p) ?? p.main;
+  const fa = art.foreArm?.(p) ?? p.main;
+  const th = art.thigh?.(p) ?? p.main;
+  const sh = art.shin?.(p) ?? p.second;
+  const dark = (col: string): string => shade(col, -0.22);
+  art.back?.(c, v);
+  // back arm
+  limb(c, k.shoulder, k.elbowB, k.handB, w, w * 0.92, dark(ua), dark(fa), v.ol, olw);
+  if (art.hand) art.hand(c, v, k.handB[0], k.handB[1], false);
+  else fist(c, k.handB[0], k.handB[1], (art.handR ?? 8) * s, dark(p.second), v.ol, olw * 0.8);
+  // back leg
+  limb(c, k.hip, k.kneeB, k.footB, w * 1.12, w, dark(th), dark(sh), v.ol, olw);
+  if (art.foot) art.foot(c, v, false);
+  else defaultFoot(c, v, false, art, dark(p.second));
+  art.tail?.(c, v);
+  // torso
+  if (art.torso) art.torso(c, v);
+  else defaultTorso(c, v, rig, p.main);
+  // front leg
+  limb(c, k.hip, k.kneeF, k.footF, w * 1.12, w, th, sh, v.ol, olw);
+  if (art.foot) art.foot(c, v, true);
+  else defaultFoot(c, v, true, art, p.second);
+  // head
+  boneFrame(c, v, k.head, k.ang.head);
+  art.head(c, v);
+  c.restore();
+  // weapon then front arm
+  art.weapon?.(c, v);
+  limb(c, k.shoulder, k.elbowF, k.handF, w, w * 0.92, ua, fa, v.ol, olw);
+  if (art.hand) art.hand(c, v, k.handF[0], k.handF[1], true);
+  else fist(c, k.handF[0], k.handF[1], (art.handR ?? 8) * s, p.second, v.ol, olw * 0.8);
+  art.front?.(c, v);
+}
+
+export function defaultFoot(c: CanvasRenderingContext2D, v: FView, front: boolean, art: ArtDef, col: string): void {
+  const k = v.k;
+  const pt = front ? k.footF : k.footB;
+  const phi = front ? k.ang.shF : k.ang.shB;
+  boneFrame(c, v, pt, phi - 180);
+  shoe(c, art.footL ?? 18, 9, col, shade(col, -0.4), v.ol, 2.6);
+  c.restore();
+}
+
+/** shield bubble */
+export function drawShield(c: CanvasRenderingContext2D, x: number, y: number, r: number, col: string, t: number): void {
+  const g = c.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+  g.addColorStop(0, 'rgba(255,255,255,0.55)');
+  g.addColorStop(0.5, col.replace(')', ',0.28)').replace('rgb(', 'rgba('));
+  g.addColorStop(1, col.replace(')', ',0.6)').replace('rgb(', 'rgba('));
+  c.beginPath();
+  c.arc(x, y, r * (1 + 0.02 * Math.sin(t * 0.3)), 0, Math.PI * 2);
+  c.fillStyle = g;
+  c.fill();
+  c.lineWidth = 3;
+  c.strokeStyle = col.replace(')', ',0.9)').replace('rgb(', 'rgba(');
+  c.stroke();
+  circle(c, x - r * 0.4, y - r * 0.45, r * 0.16, 'rgba(255,255,255,0.7)', null, 0);
+}

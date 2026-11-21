@@ -1,0 +1,45 @@
+// Fighter action states.
+export const A = {
+  IDLE: 0,
+  WALK: 1,
+  DASH: 2,
+  RUN: 3,
+  TURN: 4,
+  CROUCH: 5,
+  SQUAT: 6,
+  AIR: 7,
+  LAND: 8,
+  MOVE: 9,
+  SHIELD: 10,
+  SHIELDSTUN: 11,
+  SHIELDOFF: 12,
+  ROLL: 13,
+  SPOT: 14,
+  ADODGE: 15,
+  HITSTUN: 16,
+  DOWN: 17,
+  GETUP: 18,
+  GETROLL: 19,
+  TECH: 20,
+  TECHROLL: 21,
+  LEDGE: 22,
+  LEDGEUP: 23,
+  LEDGEROLL: 24,
+  GRABBED: 25,
+  HOLD: 26,
+  DIZZY: 27,
+  HELPLESS: 28,
+  DEAD: 29,
+  RESPAWN: 30,
+  TAUNT: 31,
+  BRAKE: 32,
+  WALLTECH: 33,
+  TRAPPED: 34,
+  FROZEN: 35,
+  PICKUP: 36,
+} as const;
+
+export const ACT_NAMES = Object.fromEntries(Object.entries(A).map(([k, v]) => [v, k])) as Record<number, string>;
+
+/** acts that stand on the ground */
+export const GROUNDED = new Set<number>([A.IDLE, A.WALK, A.DASH, A.RUN, A.TURN, A.CROUCH, A.SQUAT, A.LAND, A.SHIELD, A.SHIELDSTUN, A.SHIELDOFF, A.ROLL, A.SPOT, A.DOWN, A.GETUP, A.GETROLL, A.TECH, A.TECHROLL, A.HOLD, A.TAUNT, A.BRAKE, A.PICKUP, A.LEDGEUP, A.LEDGEROLL]);

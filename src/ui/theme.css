@@ -1,0 +1,42 @@
+:root {
+  --bg: #16081f;
+  --panel: rgba(30, 12, 44, 0.92);
+  --panel2: #2a1240;
+  --ink: #fff7ee;
+  --dim: #c9b6d8;
+  --pink: #ff3a6e;
+  --gold: #ffcf3a;
+  --teal: #3affd5;
+  --violet: #b26bff;
+  --ol: #1b0f24;
+  color-scheme: dark;
+}
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: Nunito, system-ui, sans-serif;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#game {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  display: block;
+}
+#ui {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+#ui > * {
+  pointer-events: auto;
+}
