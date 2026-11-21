@@ -412,6 +412,7 @@ export const hoot: FighterDef = {
       ledgeFrom: 14,
       intang: [1, 15],
       script: 'hoot:blink',
+      aim: true,
       vel: [{ f: [1, 5], vx: 0, vy: 0, grav: 0 }, { f: [6, 13], grav: 0, noDrift: true }, { f: [14, 18], grav: 0.3 }],
       hits: [{ f: [14, 16], at: 'hip', y: 26, r: 36, dmg: 6, ang: 80, bkb: 55, kbg: 62, fx: 'magic' }],
       anim: [[0, 'castWind'], [4, 'wrap'], [13, 'wrap'], [15, ['wingsUp', { lean: -8 }]], [24, 'helpless'], [42, 'helpless']],
@@ -466,8 +467,10 @@ registerScripts({
       f.v[4] = f.y;
     }
     if (f.mf >= 6 && f.mf <= 13) {
-      f.vx = f.v[1] * BLINK_SPD;
-      f.vy = -f.v[2] * BLINK_SPD * f.grav;
+      // the teleport is his recovery: its speed follows the balance recovery multiplier (D25)
+      const spd = BLINK_SPD * (cfOf(f).def.recovery ?? 1);
+      f.vx = f.v[1] * spd;
+      f.vy = -f.v[2] * spd * f.grav;
       f.kx = 0;
       f.ky = 0;
     } else if (f.mf === 14) {

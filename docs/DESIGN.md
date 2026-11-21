@@ -74,6 +74,10 @@ Move animations are keyframes `[frame, poseName | partial pose, ease?]`, poses f
 
 ### Moves
 
+Balance multipliers (damage, range, recovery, weight) sit on top of the move data in `src/data/balance.ts`
+(D25, `docs/BALANCE.md`).
+
+
 Every fighter has: `jab1 jab2 jab3 (or jabR rapid) ftilt utilt dtilt dash fsmash usmash dsmash nair fair bair
 uair dair nspec sspec uspec dspec grab dashgrab pummel fthrow bthrow uthrow dthrow ledgeatk getupatk ult`.
 A move is data (`sim/types.ts` `MoveDef`): total frames, hitboxes with active frames, bone, offset, radius,

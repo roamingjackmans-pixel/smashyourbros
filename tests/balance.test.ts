@@ -1,59 +1,26 @@
-// Dev helper: round-robin CPU 1v1 win rates (DEBUG_BALANCE=1). Every pairing, both sides, two stages.
-import { writeFileSync } from 'node:fs';
-import { it } from 'vitest';
-import { ROSTER } from '../src/sim/data';
-import { initState, step } from '../src/sim/sim';
-import type { MatchCfg } from '../src/sim/types';
+// The balance table (D25): every entry names a fighter and stays within sane limits. The win rates themselves come
+// from `npm run balance` (thousands of CPU matches, too slow for every test run); docs/BALANCE.md has the numbers.
+import { describe, expect, it } from 'vitest';
+import { TUNING } from '../src/data/balance';
+import { FIGHTER_INDEX, FIGHTERS } from '../src/sim/data';
 
-it.skipIf(!process.env.DEBUG_BALANCE)('balance', () => {
-  const ids = ROSTER.map((r) => r.def.id);
-  const wins: Record<string, number> = {};
-  const games: Record<string, number> = {};
-  const ultKos: Record<string, number> = {};
-  const stages = ['studio', 'galleon', 'orbit'];
-  let seed = 1;
-  for (let a = 0; a < ids.length; a++) {
-    for (let b = 0; b < ids.length; b++) {
-      if (a === b) continue;
-      for (const stage of stages) {
-        const c: MatchCfg = {
-          seed: seed++,
-          stage,
-          mode: 'stock',
-          stocks: 2,
-          time: 240,
-          hp: 150,
-          items: 0,
-          ult: process.env.DEBUG_BALANCE === 'noult' ? 'off' : 'meter',
-          mods: [],
-          teams: false,
-          friendlyFire: false,
-          players: [ids[a], ids[b]].map((f, i) => ({ fighter: f, color: i, team: i, cpu: 8, name: f, tapJump: false })),
-        };
-        const st = initState(c);
-        let ultActive = [-1, -1];
-        while (!st.over && st.frame < 60 * 260) {
-          step(st, [0, 0]);
-          for (const e of st.ev) {
-            if (e.t === 'ult') ultActive[e.p] = st.frame;
-            if (e.t === 'ko') {
-              const killer = 1 - e.p;
-              if (ultActive[killer] >= 0 && st.frame - ultActive[killer] < 300) ultKos[ids[killer === 0 ? a : b]] = (ultKos[ids[killer === 0 ? a : b]] ?? 0) + 1;
-            }
-          }
-          void ultActive;
-        }
-        for (const [i, id] of [ids[a], ids[b]].entries()) {
-          games[id] = (games[id] ?? 0) + 1;
-          if (st.winner.length === 1 && st.winner[0] === i) wins[id] = (wins[id] ?? 0) + 1;
-        }
-        ultActive = [-1, -1];
+describe('balance table', () => {
+  it('names real fighters, with multipliers in range', () => {
+    for (const [id, t] of Object.entries(TUNING)) {
+      expect(FIGHTER_INDEX[id], id).toBeDefined();
+      for (const [k, v] of Object.entries(t)) {
+        expect(['power', 'reach', 'recovery', 'weight'], `${id}.${k}`).toContain(k);
+        expect(v, `${id}.${k}`).toBeGreaterThan(0.75);
+        expect(v, `${id}.${k}`).toBeLessThan(1.5);
       }
     }
-  }
-  const lines = ids
-    .map((id) => ({ id, rate: (wins[id] ?? 0) / games[id] }))
-    .sort((x, y) => y.rate - x.rate)
-    .map((r) => `${r.id.padEnd(9)} ${(r.rate * 100).toFixed(0).padStart(3)}%  ult KOs ${ultKos[r.id] ?? 0}`);
-  writeFileSync(process.env.DEBUG_OUT || 'balance.txt', lines.join('\n'));
-}, 600000);
+  });
+
+  it('is applied when the fighters load', () => {
+    for (const [id, t] of Object.entries(TUNING)) {
+      const def = FIGHTERS[FIGHTER_INDEX[id]].def;
+      if (t.reach) expect(def.reach).toBe(t.reach);
+      if (t.recovery) expect(def.recovery).toBe(t.recovery);
+    }
+  });
+});

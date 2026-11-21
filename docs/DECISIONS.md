@@ -101,3 +101,15 @@ Newest last. Each: what, why.
   the tiles (favourite bro, signature move, 9 numbers, recent results, latest and next achievement) and a TROPHIES
   tile (Achievements / Unlock tasks / Statistics tabs). A full save stays well under the server's 400 kB profile
   limit (test: < 40 kB), so the server is unchanged.
+- **D25 (owner: "make all 16 characters' win rates roughly the same… within 15% of each other")** Measured with
+  `npm run balance` (new: a parallel CPU round robin: every pairing, both sides, all stages, many seeds) in three
+  conditions: CPU 9, CPU 9 without ultimates, CPU 6. Found and fixed a CPU bug first: during an up-special the CPU
+  steered at its opponent instead of the ledge, so drifting recoveries drifted the wrong way and Hoot's aimed
+  teleport went straight up (he died off the bottom twice as often as anyone); CPUs now steer for the ledge, aiming
+  moves marked `aim` straight at it. Balance lives in one table, `src/data/balance.ts`, applied when the fighters load:
+  damage (`power`), range (hitbox radius and forward offset, grabs, projectile hitboxes), recovery (up-special lift and
+  drift, half on air jump and air speed; Hoot's teleport speed) and weight. Tuned by `npm run balance:tune` (damped
+  steps toward 50%), Sir Clank and Nimbus by hand from one-knob experiments. Result: every fighter's overall win rate is
+  49.0–51.4% (was 41.3–58.2%); per condition the best-minus-worst spread is 8.1 / 11.1 / 16.0 points (was 17.2 /
+  23.6 / 21.0) and 12.8 on the default rules, which weren't tuned on (was 20.8). The one gap over 15 is CPU 6, where
+  Nimbus (58%) and Clank (42%) depend on the CPU's skill, not their stats. Full report: `docs/BALANCE.md`.

@@ -21,7 +21,8 @@ up to 4 players with rollback netcode. Accounts, friends and the relay are **Sho
   (use `sim/math.ts`). Iterate arrays in index order. State must stay plain cloneable data.
 - Presentation never changes state; events are de-duplicated by frame because rollback replays frames.
 - Moves are data in `src/data/fighters/<id>.ts`; art in `src/render/fighters/<id>.ts`. Hitboxes ride bones.
-- Every fighter must finish bot-vs-bot matches in `tests/sim.test.ts`.
+- Every fighter must finish bot-vs-bot matches in `tests/sim.test.ts`. Balance numbers live in `src/data/balance.ts`;
+  after changing moves or stats, re-run `npm run balance` and keep every fighter near 50% (D25).
 - Menus must work by pad: clickables are focusable, Back has `data-back`, main action `data-pad-start` (DESIGN §5).
 - Rendering: no canvas `filter` / `shadowBlur` / per-frame full-screen gradients; screen space via `screenT(c)` (D22).
 
@@ -30,6 +31,7 @@ up to 4 players with rollback netcode. Accounts, friends and the relay are **Sho
 npm run dev                      # Shoallhell server :3031 (from ..\Shoallhell) + Vite :5175
 npm run typecheck; npm test
 npm run build                    # dist/
+npm run balance                  # CPU round robin win rates (docs/BALANCE.md); balance:tune rewrites src/data/balance.ts
 ```
 Dev shortcuts: `?quick&p1=kit&p2=clank&cpu2=5&stage=main&boxes` jumps into a match; `?slot=2` = second save;
 `?fps` = frame-time overlay.

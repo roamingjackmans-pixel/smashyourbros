@@ -10,7 +10,9 @@
     "dev:client": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run",
+    "balance": "node scripts/balance.mjs",
+    "balance:tune": "node scripts/tune-balance.mjs"
   },
   "dependencies": {
     "socket.io-client": "^4.8.4"

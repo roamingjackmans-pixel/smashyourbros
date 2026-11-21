@@ -267,6 +267,8 @@ export interface MoveDef {
   turn?: boolean;
   /** B-reverse allowed on frame 1-3 */
   reverse?: boolean;
+  /** the stick sets this move's direction (a teleport): CPUs aim it at the ledge when recovering */
+  aim?: boolean;
   /** stop at stage edges instead of sliding off */
   edgeStop?: boolean;
   sfx?: [number, string][];
@@ -316,6 +318,9 @@ export interface FighterDef {
   scale?: number;
   /** balance: multiplies all of this fighter's damage (default 1) */
   power?: number;
+  /** balance (set from data/balance.ts): attack range and recovery multipliers, for scripts that need them */
+  reach?: number;
+  recovery?: number;
   rig: RigDef;
   stats: Stats;
   moves: Record<string, MoveDef>;

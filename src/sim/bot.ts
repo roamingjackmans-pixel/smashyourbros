@@ -143,6 +143,26 @@ export function botInput(st: State, f: Fighter): number {
     return pack(0, 0, B_ATTACK, 0);
   }
 
+  // ---- during an up-special offstage: steer for the ledge. It used to fall through to the fighting logic and steer
+  // at the opponent, so drifting up-specials drifted the wrong way and aimed ones (Hoot's teleport) went straight up
+  // or out to sea (D25).
+  if (offstage && f.gnd < 0 && f.act === A.MOVE && (cf.moveIds[f.mv] ?? '').startsWith('uspec')) {
+    const side = f.x < center ? -1 : 1;
+    const ledgeX = side < 0 ? edgeL : edgeR;
+    const under = f.y - stage.y > 15 && (side < 0 ? f.x > edgeL - 30 : f.x < edgeR + 30);
+    // just onto the stage, a little above it; from under the stage, out past the ledge first
+    const tx = under ? ledgeX + side * 40 : ledgeX - side * 30;
+    const ty = stage.y - 40;
+    const ax = tx - f.x;
+    const ay = f.y - ty; // + = the target is above
+    // an aimed move (a teleport) gets the exact direction; the rest drift: full speed toward the target, stick up
+    if (cf.moves[f.mv]?.aim) {
+      const m = Math.sqrt(ax * ax + ay * ay) || 1;
+      return pack((ax / m) * 100, (ay / m) * 100, 0, 0);
+    }
+    return pack(ax >= 0 ? 100 : -100, ay > 0 ? 100 : 0, 0, 0);
+  }
+
   // ---- recovery: aim just outside the nearest ledge; never fly up into the underside of the stage
   if (offstage && f.gnd < 0 && f.act !== A.MOVE && f.act !== A.ADODGE) {
     const side = f.x < center ? -1 : 1;
