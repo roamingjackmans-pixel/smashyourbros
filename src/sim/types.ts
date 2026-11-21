@@ -87,6 +87,9 @@ export interface Skel {
   scale: number;
   facing: number;
   grav: number;
+  /** squash and stretch from the pose (visual only) */
+  sx: number;
+  sy: number;
 }
 
 // ------------------------------------------------------------------ moves
@@ -311,6 +314,8 @@ export interface FighterDef {
   weight: number;
   /** overall size multiplier */
   scale?: number;
+  /** balance: multiplies all of this fighter's damage (default 1) */
+  power?: number;
   rig: RigDef;
   stats: Stats;
   moves: Record<string, MoveDef>;
@@ -502,6 +507,8 @@ export interface Fighter {
   a2: number;
   /** specials used this airtime (bits) */
   airUsed: number;
+  /** frames of float used this airtime */
+  floatT: number;
   /** frames since a fresh x / y flick (99 = none) */
   sxT: number;
   syT: number;

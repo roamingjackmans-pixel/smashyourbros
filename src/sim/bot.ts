@@ -86,7 +86,7 @@ export function botInput(st: State, f: Fighter): number {
   const edgeL = stage.x1;
   const edgeR = stage.x2;
   const center = (edgeL + edgeR) / 2;
-  const offstage = f.x < edgeL - 10 || f.x > edgeR + 10 || f.y > stage.y + 30;
+  const offstage = f.x < edgeL - 10 || f.x > edgeR + 10 || f.y > stage.y + 15;
   let x = 0;
   let y = 0;
   let b = 0;
@@ -143,32 +143,39 @@ export function botInput(st: State, f: Fighter): number {
     return pack(0, 0, B_ATTACK, 0);
   }
 
-  // ---- recovery
+  // ---- recovery: aim just outside the nearest ledge; never fly up into the underside of the stage
   if (offstage && f.gnd < 0 && f.act !== A.MOVE && f.act !== A.ADODGE) {
-    const targetX = f.x < center ? edgeL : edgeR;
-    const dir = targetX > f.x ? 1 : -1;
-    x = dir * 100;
+    const side = f.x < center ? -1 : 1;
+    const ledgeX = side < 0 ? edgeL : edgeR;
+    const aimX = ledgeX + side * 50;
     const below = f.y - stage.y; // + = below the stage top
-    const farX = Math.abs(f.x - targetX);
+    const under = below > 15 && (side < 0 ? f.x > edgeL - 30 : f.x < edgeR + 30);
+    const farX = Math.abs(f.x - aimX);
+    // under the stage: get out sideways first
+    const dir = under ? side : aimX > f.x ? 1 : -1;
+    x = dir * 100;
     bm[0] = P_RECOVER;
-    if (f.act === A.HELPLESS) return pack(x, 0, 0, 0);
-    if (f.jumps > 0 && (below > -40 || f.vy > 4) && f.vy > -3) {
-      return pack(x, 0, B_JUMP, 0);
-    }
-    if (f.jumps === 0 && (below > 60 || (farX > 260 && below > -100)) && f.vy > -2) {
-      // up special toward the ledge (side special first if far and the fighter has a recovery side B)
-      if (farX > 330 && below < 120 && cf.moves[cf.moveIdx.sspec]?.oncePerAir && !(f.airUsed & (1 << (cf.moveIdx.sspec % 30)))) return pack(x, 0, B_SPECIAL, 0);
-      return pack(dir * 60, 100, B_SPECIAL, 0);
+    if (f.act === A.HELPLESS) return pack(ledgeX > f.x ? 100 : -100, 0, 0, 0);
+    if (f.jumps > 0 && (below > -40 || f.vy > 4) && f.vy > -3 && !(under && below < 120)) return pack(x, 0, B_JUMP, 0);
+    const desperate = below > 380;
+    if (f.jumps === 0 && f.vy > -2 && (desperate || (!under && (below > 50 || (farX > 260 && below > -100))))) {
+      // side special first when far out and the fighter has a recovery side B
+      if (farX > 230 && below < 140 && cf.moves[cf.moveIdx.sspec]?.oncePerAir && !(f.airUsed & (1 << (cf.moveIdx.sspec % 30)))) return pack(ledgeX > f.x ? 100 : -100, 0, B_SPECIAL, 0);
+      return pack((ledgeX > f.x ? 1 : -1) * (farX > 120 ? 70 : 35), 100, B_SPECIAL, 0);
     }
     return pack(x, 0, 0, 0);
   }
 
+  if (f.act !== A.HOLD && f.act !== A.MOVE) bm[4] = 0;
   // ---- holding someone: throw
   if (f.act === A.HOLD) {
     if (f.af < 6 + (10 - lvl) * 2) return pack(0, 0, 0, 0);
     const v = st.fighters[f.grabbing];
     if (!v) return pack(0, 0, 0, 0);
-    if (f.af < 30 && v.dmg < 60 && rnd(st, f, 7) < 0.4 && st.frame % 12 === 0) return pack(0, 0, B_ATTACK, 0);
+    if (bm[4] < 2 && v.dmg < 60 && rnd(st, f, 7) < 0.4 && st.frame % 12 === 0) {
+      bm[4]++;
+      return pack(0, 0, B_ATTACK, 0);
+    }
     const towardEdge = (f.x < center ? -1 : 1) === f.facing;
     const r = rnd(st, f, 8);
     if (v.dmg > 110) return pack(towardEdge ? f.facing * 100 : -f.facing * 100, 0, 0, 0);
@@ -239,7 +246,12 @@ export function botInput(st: State, f: Fighter): number {
 
   if (f.gnd < 0 || (f.act !== A.IDLE && f.act !== A.WALK && f.act !== A.DASH && f.act !== A.RUN && f.act !== A.CROUCH && f.act !== A.LAND && f.act !== A.BRAKE)) {
     // busy (mid-move): steer back toward the stage when offstage, otherwise keep drifting toward the target
-    if (offstage && f.gnd < 0) return pack(f.x < center ? 100 : -100, 0, b, 0);
+    if (offstage && f.gnd < 0) {
+      const side = f.x < center ? -1 : 1;
+      const aim = (side < 0 ? edgeL : edgeR) + side * 40;
+      const underNow = f.y > stage.y + 15 && (side < 0 ? f.x > edgeL - 30 : f.x < edgeR + 30);
+      return pack(underNow ? side * 100 : aim > f.x ? 100 : -100, f.y > stage.y ? 40 : 0, b, 0);
+    }
     return pack(bm[6] ?? 0, 0, b, 0);
   }
 

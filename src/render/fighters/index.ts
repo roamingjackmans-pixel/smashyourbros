@@ -20,9 +20,16 @@ import { tempoArt } from './tempo';
 import { stagehandArt } from './stagehand';
 import { maxArt } from './max';
 
-const ALL: Record<string, ArtDef | null> = { kit: kitArt, clank: clankArt, granny: grannyArt, zippy: zippyArt, hoot: hootArt, bouldar: bouldarArt, vesper: vesperArt, chef: chefArt, coral: coralArt, nimbus: nimbusArt, amp: ampArt, ruby: rubyArt, echo: echoArt, inverta: invertaArt, smudge: smudgeArt, tempo: tempoArt, stagehand: stagehandArt, max: maxArt };
+// built on first use, so the import cycle (art files -> fighterDraw -> this registry) can never read an art
+// object before its module has finished loading
 export const ARTS: Record<string, ArtDef> = {};
-for (const [k, v] of Object.entries(ALL)) if (v) ARTS[k] = v;
+let built = false;
+function build(): void {
+  if (built) return;
+  built = true;
+  const all: Record<string, ArtDef | null> = { kit: kitArt, clank: clankArt, granny: grannyArt, zippy: zippyArt, hoot: hootArt, bouldar: bouldarArt, vesper: vesperArt, chef: chefArt, coral: coralArt, nimbus: nimbusArt, amp: ampArt, ruby: rubyArt, echo: echoArt, inverta: invertaArt, smudge: smudgeArt, tempo: tempoArt, stagehand: stagehandArt, max: maxArt };
+  for (const [k, v] of Object.entries(all)) if (v && !ARTS[k]) ARTS[k] = v;
+}
 
 const cache: Record<string, ArtDef> = {};
 
@@ -43,6 +50,7 @@ function mannequin(color: string): ArtDef {
 }
 
 export function artFor(id: string): ArtDef {
+  build();
   if (ARTS[id]) return ARTS[id];
   if (!cache[id]) {
     const def = FIGHTERS.find((f) => f.def.id === id)?.def;
@@ -52,5 +60,6 @@ export function artFor(id: string): ArtDef {
 }
 
 export function registerArt(id: string, art: ArtDef): void {
+  build();
   ARTS[id] = art;
 }

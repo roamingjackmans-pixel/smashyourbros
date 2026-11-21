@@ -82,6 +82,7 @@ function newFighter(cfg: MatchCfg, i: number, def: number): Fighter {
     a1: 0,
     a2: 0,
     airUsed: 0,
+    floatT: 0,
     sxT: 99,
     syT: 99,
     sxDir: 0,

@@ -53,7 +53,8 @@ export function speedMul(st: State, f: Fighter): number {
   if (f.stuckT > 0) m *= 0.15;
   // Smudge's paint
   if (f.gnd >= 0) {
-    for (const p of st.paint) {
+    for (let k = st.paint.length - 1; k >= 0; k--) {
+      const p = st.paint[k];
       if (p.s === f.gnd && f.x >= p.x1 && f.x <= p.x2) {
         m *= st.fighters[p.owner] && (p.owner === f.i || (st.cfg.teams && st.fighters[p.owner].team === f.team)) ? 1.3 : 0.72;
         break;
@@ -368,9 +369,9 @@ function trySpecial(st: State, f: Fighter, air: boolean): boolean {
     id = 'sspec';
     f.facing = sign(sx(f));
   }
-  if (air && airUsed(f, id)) return false;
-  consume(f, B_SPECIAL);
   const airId = `${id}Air`;
+  if (air && (airUsed(f, id) || airUsed(f, airId))) return false;
+  consume(f, B_SPECIAL);
   if (air && hasMove(f, airId)) return startMove(st, f, airId);
   return startMove(st, f, id);
 }
@@ -756,6 +757,11 @@ export function updateFighter(st: State, f: Fighter): void {
       if (airOptions(st, f, cf)) break;
       airDrift(st, f, cf, 1);
       fastFall(st, f);
+      // float: hold Jump while falling to hover (per airtime budget)
+      if (s.float && f.floatT < s.float && held(f, B_JUMP) && f.vy * f.grav >= 0 && !f.ff) {
+        f.floatT++;
+        f.vy = 0.4 * f.grav;
+      }
       break;
     }
     case A.HELPLESS: {
@@ -1123,10 +1129,11 @@ function shieldBreak(st: State, f: Fighter): void {
 }
 
 export function flipGrav(st: State, f: Fighter): void {
+  // standing on something: step clear of it so the body isn't flipped into the floor (or ceiling)
+  if (f.gnd >= 0) f.y -= f.grav * bodyH(st, f);
   f.grav = -f.grav;
   f.gnd = -1;
   f.vy = -f.vy * 0.3;
-  f.ky = 0;
   f.ff = false;
   if (f.act === A.LEDGE) {
     f.act = A.AIR;
@@ -1205,13 +1212,19 @@ function physics(st: State, f: Fighter, cf: CFighter, active: boolean): void {
   const grav = s.grav * gravMul(st) * gravNow(f, m);
   const fallCap = (f.ff ? s.ffall : s.fall) * (mod(st, 'lowgrav') ? 0.75 : mod(st, 'heavygrav') ? 1.25 : 1);
   let fallV = f.vy * g;
-  if (f.act !== A.ADODGE || f.af > 16 || (f.a1 === 0 && f.a2 === 0)) {
+  const moveOwnsVy = f.act === A.MOVE && gravNow(f, m) === 0;
+  if (!moveOwnsVy && (f.act !== A.ADODGE || f.af > 16 || (f.a1 === 0 && f.a2 === 0))) {
     if (f.ff && fallV < fallCap && fallV > -1.5) fallV = fallCap;
     fallV = Math.min(fallCap, fallV + grav);
     if (f.act === A.ADODGE && f.a1 === 0 && f.a2 === 0) fallV = Math.min(fallV, 2);
   }
   f.vy = fallV * g;
   if (f.act === A.HITSTUN && f.gnd < 0) f.vx = approach(f.vx, 0, s.airFric);
+  if (f.act === A.TRAPPED) {
+    // bubbles float: no gravity, a gentle rise
+    f.vy = -0.5 * g;
+    f.ky = 0;
+  }
   const prevKy = f.ky;
   const prevKx = f.kx;
   const r = moveBody(ss, f.x, f.y, f.vx + f.kx, f.vy + f.ky, hw, h, g, f.dropT > 0 || (f.act === A.HITSTUN && false));
@@ -1262,6 +1275,7 @@ function land(st: State, f: Fighter, cf: CFighter, surf: number, speed: number):
   f.ff = false;
   f.ledgeN = 0;
   f.airUsed = 0;
+  f.floatT = 0;
   f.helpless = false;
   f.vy = 0;
   const kyDown = f.ky * f.grav;

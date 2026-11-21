@@ -11,6 +11,7 @@ export const kit: FighterDef = {
   role: 'All-rounder',
   color: '#ff8a2a',
   weight: 98,
+  power: 0.98,
   rig: { thigh: 24, shin: 24, torso: 36, head: 21, upper: 20, fore: 18, girth: 15, limb: 7 },
   stats: { walk: 9.5, dash: 17, run: 15.5, dashFrames: 11, airSpeed: 10, airAccel: 0.55, airFric: 0.12, groundFric: 0.85, grav: 0.78, fall: 13.5, ffall: 21, jump: 21.5, hop: 14.5, djump: 20, jumps: 1, squat: 3 },
   bio: 'Top of her class at the Comet Colonies Flight Academy (class size: one). Beamed aboard mid-launch and has decided the whole show is a training simulation. Calls everyone "co-pilot".',
@@ -91,7 +92,7 @@ export const kit: FighterDef = {
       charge: 5,
       hits: [
         { f: [7, 8], at: 'footF', r: 18, dmg: 12, ang: 30, bkb: 28, kbg: 96 },
-        { f: [15, 16], at: 'footB', r: 18, dmg: 14, ang: 30, bkb: 30, kbg: 98, grp: 1 },
+        { f: [15, 16], at: 'footB', r: 18, dmg: 14, ang: 150, bkb: 30, kbg: 98, grp: 1 },
       ],
       anim: [[0, 'crouch'], [5, ['downSmashWind', { rot: 0 }]], [8, ['downSmash', { lean: 30 }]], [12, ['downSmash', { lean: 10, legF: -82, legB: 82 }]], [16, ['downSmash', { lean: 30, legF: 82, legB: -82 }]], [26, 'crouch'], [44, 'idle']],
     },
@@ -119,7 +120,7 @@ export const kit: FighterDef = {
       air: true,
       landLag: 9,
       autoCancel: [3, 26],
-      hits: [{ f: [6, 9], at: 'footB', r: 18, dmg: 11.5, ang: 361, bkb: 20, kbg: 100 }],
+      hits: [{ f: [6, 9], at: 'footB', r: 18, dmg: 11.5, ang: 145, bkb: 20, kbg: 100 }],
       anim: [[0, ['bair', { legB: -40, shinB: 100 }]], [6, 'bair'], [14, 'bair'], [32, 'fall']],
     },
     uair: {
@@ -247,7 +248,7 @@ export const kit: FighterDef = {
       frames: 44,
       hits: [
         { f: [14, 16], at: 'footF', r: 18, dmg: 7, ang: 361, bkb: 50, kbg: 40 },
-        { f: [22, 24], at: 'footB', r: 18, dmg: 7, ang: 361, bkb: 50, kbg: 40, grp: 1 },
+        { f: [22, 24], at: 'footB', r: 18, dmg: 7, ang: 150, bkb: 50, kbg: 40, grp: 1 },
       ],
       anim: [[0, 'lying'], [12, ['downSmash', { lean: 50 }]], [16, 'downSmash'], [24, ['downSmash', { legF: -82, legB: 82 }]], [44, 'idle']],
     },

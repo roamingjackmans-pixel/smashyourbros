@@ -96,6 +96,8 @@ export function worldSkel(rig: RigDef, p: Pose, x: number, y: number, facing: nu
     scale,
     facing,
     grav,
+    sx: p.sx,
+    sy: p.sy,
   };
 }
 

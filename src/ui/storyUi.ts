@@ -243,6 +243,7 @@ export function nodeCfg(n: StoryNode, humans: PlayerCfg[]): MatchCfg {
 
 async function runNode(n: StoryNode, humans: SlotPick[]): Promise<void> {
   const you = humans[0]?.fighter ?? 'kit';
+  show(() => {});
   await playScene(n.before ?? [], you);
   const hcfg: PlayerCfg[] = humans.map((s, i) => ({ fighter: s.fighter, color: s.palette, team: 0, cpu: 0, name: s.name || `P${i + 1}`, tapJump: s.device?.kind === 'pad' ? session.profile.settings.tapJumpPad : session.profile.settings.tapJumpKb }));
   const cfg = nodeCfg(n, hcfg);

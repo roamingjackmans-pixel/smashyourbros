@@ -5,6 +5,7 @@ import { FIGHTERS } from './data';
 import { ev } from './events';
 import { bodyH, cfOf, surfs } from './fighter';
 import { datan2, dcos, dsin } from './math';
+import { SCRIPTS } from './scripts';
 import type { Fighter, HitProps, Proj, ProjDef, Skel, State } from './types';
 
 export function projDef(p: Proj): ProjDef {
@@ -86,7 +87,10 @@ function addPaint(st: State, surf: number, x: number, owner: number, w: number):
   for (const q of st.paint) {
     if (q.s !== surf || q.owner === owner) continue;
     if (x1 <= q.x1 && x2 >= q.x2) q.t = 0;
-    else if (x1 > q.x1 && x2 < q.x2) continue;
+    else if (x1 > q.x1 && x2 < q.x2) {
+      st.paint.push({ s: q.s, x1: x2, x2: q.x2, owner: q.owner, t: q.t });
+      q.x2 = x1;
+    }
     else if (x1 <= q.x1 && x2 > q.x1) q.x1 = x2;
     else if (x2 >= q.x2 && x1 < q.x2) q.x2 = x1;
   }
@@ -106,7 +110,7 @@ export function updateProjs(st: State, skels: Skel[]): void {
     if (st.timeStop > 0 && st.timeStopBy !== p.o) continue;
     p.age++;
     if (p.age > p.life) {
-      if (d.fuse || d.explode) explode(st, p, d);
+      if (d.fuse && d.explode) explode(st, p, d);
       kill(st, p, d);
       continue;
     }
@@ -283,7 +287,7 @@ export function updateProjs(st: State, skels: Skel[]): void {
         if (!canTouch(st, owner ?? null, t)) continue;
         const caps = hurtCapsules(skels[t.i], cfOf(t));
         if (!circleHitsCapsules(p.x, p.y, d.pulse.r, caps)) continue;
-        applyHit(st, owner ?? null, t, d.pulse.hit, { sx: p.x, sy: p.y, facing: t.x >= p.x ? 1 : -1, dmgMult: 1, kbMult: 1, proj: true, moveIdx: -1, shielded: isShielding(t) });
+        applyHit(st, owner ?? null, t, d.pulse.hit, { sx: p.x, sy: p.y, facing: t.x >= p.x ? 1 : -1, dmgMult: 1, kbMult: 1, proj: true, moveIdx: -1, shielded: isShielding(t) && !d.pulse.hit.unblockable });
       }
       ev(st, 'pulse', p.x, p.y, p.o, d.pulse.r);
     }
@@ -335,8 +339,18 @@ export function updateProjs(st: State, skels: Skel[]): void {
       }
       p.hitMask |= bit;
       p.hitAt[t.i] = st.frame;
-      const mult = (d.chargeable ? 1 + p.charge * 1.6 : 1) * p.v1;
-      const res = applyHit(st, owner ?? null, t, hp, { sx: p.x - (p.vx >= 0 ? 30 : -30), sy: p.y, facing: p.vx === 0 ? (t.x >= p.x ? 1 : -1) : p.vx > 0 ? 1 : -1, dmgMult: mult, kbMult: d.chargeable ? 1 + p.charge * 0.5 : 1, proj: true, moveIdx: -1, shielded });
+      let mult = (d.chargeable ? 1 + p.charge * 1.6 : 1) * p.v1 * (owner ? (FIGHTERS[owner.def].def.power ?? 1) : 1);
+      let kbm = d.chargeable ? 1 + p.charge * 0.5 : 1;
+      let fxo: string | undefined;
+      const hook = owner ? SCRIPTS[`${FIGHTERS[owner.def].def.id}:mult`] : undefined;
+      if (owner && hook) {
+        const out = { dmg: 1, kb: 1, fx: undefined as string | undefined, proj: true };
+        hook(st, owner, null, out);
+        mult *= out.dmg;
+        kbm *= out.kb;
+        fxo = out.fx;
+      }
+      const res = applyHit(st, owner ?? null, t, hp, { sx: p.x - (p.vx >= 0 ? 30 : -30), sy: p.y, facing: p.vx === 0 ? (t.x >= p.x ? 1 : -1) : p.vx > 0 ? 1 : -1, dmgMult: mult, kbMult: kbm, proj: true, moveIdx: -1, shielded, fxOverride: fxo });
       if (res === 'hit' && d.trap) {
         t.act = A.TRAPPED;
         t.trapT = d.trap;
@@ -346,7 +360,7 @@ export function updateProjs(st: State, skels: Skel[]): void {
         t.gnd = -1;
         t.vy = -1.5;
       }
-      if (d.fuse && d.explode) {
+      if (d.fuse && d.explode && !d.pierce) {
         explode(st, p, d);
         p.dead = true;
         ev(st, 'projend', p.x, p.y, p.o, p.id, 0, d.kind);
@@ -396,7 +410,9 @@ export function updateProjs(st: State, skels: Skel[]): void {
         const d = projDef(p);
         const dx = cx - p.x;
         const dy = cy - p.y;
-        if (dx * dx + dy * dy <= (cr + d.r) * (cr + d.r)) {
+        const moveStart = st.frame - a.mf;
+        if (dx * dx + dy * dy <= (cr + d.r) * (cr + d.r) && p.hitAt[4 + a.i] !== moveStart) {
+          p.hitAt[4 + a.i] = moveStart;
           p.hp -= h.dmg;
           ev(st, 'hit', p.x, p.y, a.i, h.dmg, 10, 'hit');
           if (p.hp <= 0) kill(st, p, d);

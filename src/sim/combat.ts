@@ -100,6 +100,7 @@ export function attackMult(st: State, a: Fighter, moveIdx: number): { dmg: numbe
     }
     dmg *= found ? 1 - stale : 1.05;
   }
+  dmg *= cfOf(a).def.power ?? 1;
   if (a.giantT > 0 || mod(st, 'giant')) dmg *= 1.2;
   if (a.tinyT > 0 || mod(st, 'tiny')) dmg *= 0.75;
   if (mod(st, 'glass')) dmg *= 1.5;
@@ -204,8 +205,8 @@ export function applyHit(st: State, a: Fighter | null, t: Fighter, hp: HitProps,
   t.lastHitT = 0;
   if (st.cfg.ult === 'meter') {
     const mul = mod(st, 'suddenult') ? 3 : 1;
-    if (a && !a.ultReady) a.meter = Math.min(100, a.meter + dmg * 0.75 * mul);
-    if (!t.ultReady) t.meter = Math.min(100, t.meter + dmg * 0.45 * mul);
+    if (a && !a.ultReady) a.meter = Math.min(100, a.meter + dmg * 0.42 * mul);
+    if (!t.ultReady) t.meter = Math.min(100, t.meter + dmg * 0.26 * mul);
     if (a && a.meter >= 100 && !a.ultReady) {
       a.ultReady = true;
       ev(st, 'ultready', a.x, a.y, a.i);
@@ -384,12 +385,13 @@ export function resolveFighterHits(st: State, skels: Skel[]): void {
     if (c.h.grab) continue;
     const { a, t, h } = c;
     const grp = h.grp ?? 0;
+    const firstHitOfMove = a.hitMask.every((x) => x === 0);
     a.hitMask[t.i] |= 1 << grp;
     a.hitAt[t.i] = a.mf;
     const mult = attackMult(st, a, a.mv);
     const r = applyHit(st, a, t, h, { sx: a.x, sy: a.y - bodyH(st, a) * 0.5, facing: a.facing, dmgMult: mult.dmg, kbMult: mult.kb, proj: false, moveIdx: a.mv, shielded: c.shielded, fxOverride: mult.fx });
     if (r === 'hit' || r === 'armor') {
-      if (a.stale[0] !== a.mv || a.hitMask[t.i] === 1 << grp) {
+      if (firstHitOfMove) {
         a.stale.unshift(a.mv);
         a.stale.length = 9;
       }
@@ -438,7 +440,15 @@ export function throwsAndPummels(st: State): void {
     const m = cfOf(a).moves[a.mv];
     const v = st.fighters[a.grabbing];
     if (!v || v.act !== A.GRABBED) continue;
-    if (m.pummel && a.mf === 4) {
+    if (m.pummel) {
+      a.grabT--;
+      if (a.grabT <= 0) {
+        grabRelease(st, a, v);
+        continue;
+      }
+    }
+    if (m.pummel && a.mf === 4 && a.hitMask[v.i] === 0) {
+      a.hitMask[v.i] = 1;
       v.dmg += m.pummel;
       v.hp -= m.pummel;
       a.st.dealt += m.pummel;

@@ -50,6 +50,9 @@ export const KEYMAPS: KeyMap[] = [
 ];
 
 const down = new Set<string>();
+/** when each key was last pressed: a tap shorter than a frame still counts for 45 ms */
+const tapped = new Map<string, number>();
+const LATCH_MS = 45;
 let attached = false;
 let blurred = false;
 
@@ -59,12 +62,14 @@ export function attachKeyboard(): void {
   window.addEventListener('keydown', (e) => {
     const t = e.target as HTMLElement | null;
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
+    if (!down.has(e.code)) tapped.set(e.code, performance.now());
     down.add(e.code);
     if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   });
   window.addEventListener('keyup', (e) => down.delete(e.code));
   window.addEventListener('blur', () => {
     down.clear();
+    tapped.clear();
     blurred = true;
   });
   window.addEventListener('focus', () => (blurred = false));
@@ -84,7 +89,8 @@ export interface Device {
 function anyKey(map: KeyMap, a: Action): boolean {
   const ks = map.keys[a];
   if (!ks) return false;
-  for (const k of ks) if (down.has(k)) return true;
+  const now = performance.now();
+  for (const k of ks) if (down.has(k) || now - (tapped.get(k) ?? -1e9) < LATCH_MS) return true;
   return false;
 }
 

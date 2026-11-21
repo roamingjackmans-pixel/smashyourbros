@@ -93,6 +93,12 @@ export function drawFighter(c: CanvasRenderingContext2D, st: State, f: Fighter, 
   let alpha = o.alpha ?? 1;
   if (!o.still && f.invinc > 0 && f.act !== A.RESPAWN) alpha *= 0.55 + 0.45 * (t % 8 < 4 ? 1 : 0);
   c.globalAlpha = alpha;
+  // squash and stretch around the feet
+  if (k.sx !== 1 || k.sy !== 1) {
+    c.translate(f.x, f.y);
+    c.scale(k.sx || 1, k.sy || 1);
+    c.translate(-f.x, -f.y);
+  }
   if (v.flash > 0) c.filter = 'brightness(2.4) saturate(0.4)';
   else if (f.starT > 0) c.filter = `hue-rotate(${(t * 18) % 360}deg) saturate(1.6) brightness(1.15)`;
   else if (f.frozenT > 0) c.filter = 'saturate(0.3) brightness(1.3) hue-rotate(170deg)';

@@ -168,7 +168,7 @@ export class Effects {
         break;
       }
       case 'boom':
-        this.add({ k: 'boom', x: e.x, y: e.y, life: 26, max: 26, size: e.a ?? 100, col: '#ffb13a' });
+        this.add({ k: 'boom', x: e.x, y: e.y, life: 26, max: 26, size: Math.min(460, e.a ?? 100), col: '#ffb13a' });
         for (let i = 0; i < 10; i++) this.add({ k: 'smoke', x: e.x, y: e.y, vx: (Math.random() - 0.5) * 10, vy: (Math.random() - 0.5) * 10, life: 40, max: 40, size: 30, col: 'rgba(80,60,70,0.6)' });
         cam.addShake(Math.min(20, (e.a ?? 100) / 10));
         break;
@@ -189,6 +189,9 @@ export class Effects {
         if (d) this.bubble(e.x, e.y - FIGHTERS[f.def].height - 40, d.line, tints[e.p] ?? '#fff');
         break;
       }
+      case 'say':
+        this.text(e.x, e.y, e.s ?? '', tints[e.p] ?? '#ffe14f', 30);
+        break;
       case 'eat':
         this.text(e.x, e.y - 140, 'NOM!', '#ffb3a6', 28);
         break;
@@ -208,7 +211,7 @@ export class Effects {
         this.add({ k: 'ring', x: e.x, y: e.y, life: 14, max: 14, size: 50, col: '#9cf6ff' });
         break;
       case 'pulse':
-        this.add({ k: 'ring', x: e.x, y: e.y, life: 16, max: 16, size: e.a ?? 100, col: '#ffe14f' });
+        this.add({ k: 'ring', x: e.x, y: e.y, life: 16, max: 16, size: Math.min(260, e.a ?? 100), col: tints[e.p] ?? '#ffe14f' });
         break;
       case 'charged':
         this.add({ k: 'ring', x: e.x, y: e.y - 60, life: 14, max: 14, size: 60, col: '#ffffff' });
