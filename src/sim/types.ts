@@ -148,7 +148,7 @@ export interface HitDef extends HitProps {
   r: number;
   /** hitbox group: a group hits each target once per move (unless rehit) */
   grp?: number;
-  /** multi-hit: the group may hit again after this many frames */
+  /** multi-hit: the group may hit again after this many move frames (hitlag does not count) */
   rehit?: number;
   /** grab box */
   grab?: boolean;

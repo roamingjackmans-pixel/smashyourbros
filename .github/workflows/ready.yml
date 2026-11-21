@@ -1,0 +1,59 @@
+# Gets each push to main ready for josephjackman.com/games/smashyourbros/.
+# Type checks, runs the tests (simulation, rollback netcode, CPU matches for every fighter), builds the game, and
+# puts the built site in `site/` on the `ready` branch. The `games` repo (roamingjackmans-pixel/games) publishes
+# `site/` from `ready` (deploy/library.json: { "folder": "smashyourbros", "repo": "smashyourbros", "publish": "site" }).
+# It looks for new `ready` commits every 10 minutes, or hears right away when this repo has a GAMES_DEPLOY_TOKEN secret.
+#
+# Accounts, friends and the online relay are Shoallhell's server (shared accounts). The page finds it from
+# site/config.json, written from the SYB_SERVER repository variable (default https://shoallhell.fly.dev).
+name: Ready for the games site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ready
+  cancel-in-progress: true
+
+jobs:
+  ready:
+    runs-on: ubuntu-latest
+    env:
+      DEPLOY_TOKEN: ${{ secrets.GAMES_DEPLOY_TOKEN }}
+      SYB_SERVER: ${{ vars.SYB_SERVER || 'https://shoallhell.fly.dev' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0 # the commit count is part of the version shown in the game
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - name: Point the page at the server
+        run: |
+          printf '{ "server": "%s" }\n' "$SYB_SERVER" > dist/config.json
+      - name: Commit the built site to `ready`
+        run: |
+          rm -rf /tmp/ready && mkdir -p /tmp/ready/site
+          cp -r dist/. /tmp/ready/site/
+          cd /tmp/ready
+          git init -q -b ready
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Built from ${GITHUB_SHA}"
+          git push --force "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" ready
+      - name: Tell the games site
+        if: env.DEPLOY_TOKEN != ''
+        env:
+          GH_TOKEN: ${{ env.DEPLOY_TOKEN }}
+        run: gh workflow run deploy.yml -R roamingjackmans-pixel/games

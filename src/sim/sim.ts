@@ -284,6 +284,7 @@ function rulesFrame(st: State): void {
   if (cfg.mods.includes('lava')) lavaFrame(st);
   if (cfg.mods.includes('shrink')) st.shrink = Math.max(0.58, 1 - st.timer / (cfg.time > 0 ? cfg.time * 60 : 3 * 60 * 60) * 0.42);
   if (mod(st, 'meteors') && st.timer % 70 === 0 && rint(st, 2) === 0) meteor(st);
+  if (cfg.hazards && !cfg.goal && st.timer > 600 && st.timer % 1080 === 0) stageHazard(st);
   waves(st);
   checkEnd(st);
 }
@@ -542,6 +543,21 @@ function lavaBurn(st: State, f: Fighter): void {
   applyHit(st, null, f, { dmg: 12, ang: 90, bkb: 75, kbg: 50, fx: 'fire', unblockable: true }, { sx: f.x, sy: f.y + 50, facing: 1, dmgMult: 1, kbMult: 1, proj: true, moveIdx: -1, shielded: false });
 }
 
+/** each stage's own hazard (when hazards are on): a falling stage light, a falling neon sign, a cannonball, space debris */
+function stageHazard(st: State): void {
+  const stg = STAGES[st.stage];
+  const k = stg.hazard;
+  if (!k) return;
+  const m = stg.solids[0];
+  if (k === 'cannon') {
+    const side = rint(st, 2) ? 1 : -1;
+    st.hazards.push({ k: 'cannon', o: -1, x: side * (stg.cam.r + 100), y: m.y1 - 70 - rint(st, 160), vx: -side * 16, vy: 0, t: 0, life: 260, r: 30, dead: false });
+    return;
+  }
+  const x = m.x1 + 120 + rint(st, Math.max(1, m.x2 - m.x1 - 240));
+  st.hazards.push({ k, o: -1, x, y: stg.cam.t - 200, vx: 0, vy: 0, t: 0, life: 420, r: k === 'light' ? 46 : 38, dead: false });
+}
+
 function meteor(st: State): void {
   const stg = STAGES[st.stage];
   const x = stg.cam.l + 100 + rint(st, Math.max(1, stg.cam.r - stg.cam.l - 200));
@@ -561,7 +577,19 @@ function hazardsFrame(st: State, skels: Skel[]): void {
       continue;
     }
     const owner = h.o >= 0 ? st.fighters[h.o] : null;
-    if (h.k === 'meteor') {
+    if (h.k === 'cannon') {
+      if (h.t < 50) continue; // warning
+      h.x += h.vx;
+      h.y += h.vy;
+      for (const f of st.fighters) {
+        if (!canTouch(st, null, f)) continue;
+        const dx = f.x - h.x;
+        const dy = f.y - bodyH(st, f) * 0.5 - h.y;
+        if (dx * dx + dy * dy < (h.r + 34) * (h.r + 34) && f.lastHitT > 20) applyHit(st, null, f, { dmg: 13, ang: 40, bkb: 60, kbg: 70, fx: 'fire' }, { sx: h.x - h.vx * 3, sy: h.y, facing: h.vx > 0 ? 1 : -1, dmgMult: 1, kbMult: 1, proj: true, moveIdx: -1, shielded: isShielding(f) });
+      }
+      continue;
+    }
+    if (h.k === 'meteor' || h.k === 'light' || h.k === 'sign' || h.k === 'debris') {
       if (h.t < 60) continue; // warning marker
       h.vy = Math.min(24, h.vy + 0.9);
       h.x += h.vx;

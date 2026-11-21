@@ -128,7 +128,7 @@ export class Renderer {
     }
     drawOffscreen(c, st, this.cam, w, h, tints, o.palettes, this.t);
     drawHud(c, st, w, h, o, this.t, this.shakeP);
-    drawBanners(c, st, w, h, this.t, (f) => {
+    if (!o.hideHud || st.freeze > 0) drawBanners(c, st, w, h, this.t, (f) => {
       const d = FIGHTERS[f.def].def;
       return `${d.name}: ${d.moveNames.ult ?? 'Ultimate'}`;
     });

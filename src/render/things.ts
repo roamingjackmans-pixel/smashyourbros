@@ -277,6 +277,61 @@ export function drawItem(c: CanvasRenderingContext2D, it: Item, t: number): void
 
 export function drawHazards(c: CanvasRenderingContext2D, st: State, t: number, tints: string[]): void {
   for (const h of st.hazards) {
+    if (h.k === 'cannon') {
+      if (h.t < 50) {
+        c.fillStyle = `rgba(255,80,60,${0.5 + 0.4 * Math.sin(t * 0.4)})`;
+        c.font = '900 60px Bungee, Impact';
+        c.textAlign = 'center';
+        c.fillText('!', h.vx < 0 ? h.x - 260 : h.x + 260, h.y);
+        continue;
+      }
+      circle(c, h.x, h.y, h.r, '#2b2633', OUTLINE, 5);
+      circle(c, h.x - h.r * 0.3, h.y - h.r * 0.3, h.r * 0.25, '#5d6478', null, 0);
+      c.fillStyle = 'rgba(200,200,210,0.4)';
+      for (let i = 1; i < 5; i++) circle(c, h.x - h.vx * i * 2.5, h.y, h.r * (0.7 - i * 0.12), 'rgba(220,220,230,0.35)', null, 0);
+      continue;
+    }
+    if (h.k === 'light' || h.k === 'sign' || h.k === 'debris') {
+      if (h.t < 60) {
+        const stg = STAGES[st.stage];
+        c.strokeStyle = `rgba(255,220,80,${0.4 + 0.4 * Math.sin(t * 0.4)})`;
+        c.lineWidth = 6;
+        c.beginPath();
+        c.ellipse(h.x, stg.solids[0].y1, 80, 16, 0, 0, Math.PI * 2);
+        c.stroke();
+        continue;
+      }
+      c.save();
+      c.translate(h.x, h.y);
+      c.rotate(h.t * (h.k === 'debris' ? 0.12 : 0.02));
+      if (h.k === 'light') {
+        rrect(c, -50, -24, 100, 34, 8);
+        fillStroke(c, '#3a3346', OUTLINE, 5);
+        for (let i = -1; i <= 1; i++) circle(c, i * 30, 14, 12, '#fff6c2', OUTLINE, 3);
+      } else if (h.k === 'sign') {
+        rrect(c, -60, -26, 120, 52, 8);
+        fillStroke(c, '#141826', OUTLINE, 5);
+        c.fillStyle = (t >> 3) % 2 ? '#ff3a8c' : '#3affd5';
+        c.font = '900 22px Bungee, Impact';
+        c.textAlign = 'center';
+        c.textBaseline = 'middle';
+        c.fillText('OPEN', 0, 2);
+      } else {
+        c.beginPath();
+        c.moveTo(-36, -10);
+        c.lineTo(-10, -34);
+        c.lineTo(30, -20);
+        c.lineTo(38, 16);
+        c.lineTo(0, 34);
+        c.lineTo(-30, 22);
+        c.closePath();
+        fillStroke(c, '#9aa3b5', OUTLINE, 5);
+        c.fillStyle = '#2f5fd0';
+        c.fillRect(-14, -12, 26, 18);
+      }
+      c.restore();
+      continue;
+    }
     if (h.k === 'meteor') {
       if (h.t < 60) {
         // warning marker on the floor below

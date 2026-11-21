@@ -346,7 +346,7 @@ export function resolveFighterHits(st: State, skels: Skel[]): void {
         if (h.only === 'ground' && t.gnd < 0) continue;
         const grp = h.grp ?? 0;
         if (a.hitMask[t.i] & (1 << grp)) {
-          if (!h.rehit || st.frame - a.hitAt[t.i] < h.rehit) continue;
+          if (!h.rehit || a.mf - a.hitAt[t.i] < h.rehit) continue;
         }
         const [cx, cy, r] = hitCircle(sk, h);
         if (h.grab) {
@@ -385,7 +385,7 @@ export function resolveFighterHits(st: State, skels: Skel[]): void {
     const { a, t, h } = c;
     const grp = h.grp ?? 0;
     a.hitMask[t.i] |= 1 << grp;
-    a.hitAt[t.i] = st.frame;
+    a.hitAt[t.i] = a.mf;
     const mult = attackMult(st, a, a.mv);
     const r = applyHit(st, a, t, h, { sx: a.x, sy: a.y - bodyH(st, a) * 0.5, facing: a.facing, dmgMult: mult.dmg, kbMult: mult.kb, proj: false, moveIdx: a.mv, shielded: c.shielded, fxOverride: mult.fx });
     if (r === 'hit' || r === 'armor') {

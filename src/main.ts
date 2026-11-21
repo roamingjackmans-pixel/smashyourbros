@@ -2,7 +2,7 @@
 import './ui/theme.css';
 import { audio } from './audio/audio';
 import { attachKeyboard, type Device } from './game/input';
-import { LocalMatch } from './game/match';
+import { localMatch } from './game/match';
 import { PLAYER_TINTS } from './render/renderer';
 import { FIGHTER_INDEX, ROSTER } from './sim/data';
 import type { MatchCfg } from './sim/types';
@@ -46,7 +46,7 @@ function quick(): void {
     players,
   };
   const devices: (Device | null)[] = players.map((p, i) => (p.cpu ? null : { kind: i === 0 ? 'kb' : 'pad', index: i === 0 ? 0 : i - 1, tapJump: false }));
-  const m = new LocalMatch(
+  const m = localMatch(
     canvas,
     cfg,
     devices,

@@ -47,13 +47,13 @@ export function bossFrame(st: State, skels: Skel[], init: boolean): void {
       const h = m.hits[k];
       if (a.mf < h.f[0] || a.mf > h.f[1] || h.grab) continue;
       const bit = 1 << 7;
-      if (a.hitMask[7] & bit && st.frame - a.hitAt[7] < (h.rehit ?? 999)) continue;
+      if (a.hitMask[7] & bit && a.mf - a.hitAt[7] < (h.rehit ?? 999)) continue;
       const [cx, cy, cr] = hitCircle(skels[a.i], h);
       const dx = cx - lens.x;
       const dy = cy - lens.y;
       if (dx * dx + dy * dy > (cr + lens.r) * (cr + lens.r)) continue;
       a.hitMask[7] |= bit;
-      a.hitAt[7] = st.frame;
+      a.hitAt[7] = a.mf;
       const d = h.dmg * (1 + (0.4 * a.charge) / 60);
       b.hp -= d;
       b.flash = 6;

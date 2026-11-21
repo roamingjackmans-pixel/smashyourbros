@@ -5,7 +5,7 @@
 // bm[6] stick x  bm[7] stick y
 import { A } from './acts';
 import { STAGES } from './data';
-import { B_ATTACK, B_GRAB, B_JUMP, B_SHIELD, B_SPECIAL, B_TAUNT, B_ULT, C_DOWN, C_LEFT, C_RIGHT, C_UP, pack } from './input';
+import { B_ATTACK, B_GRAB, B_JUMP, B_SHIELD, B_SPECIAL, B_TAUNT, B_ULT, C_DOWN, C_LEFT, C_RIGHT, C_UP, ix, iy, pack } from './input';
 import { hash32 } from './math';
 import { cfOf } from './fighter';
 import { surfaces } from './stage';
@@ -70,6 +70,12 @@ function inEndlag(o: Fighter): boolean {
     return o.mf > last + 2;
   }
   return o.act === A.SHIELDOFF || o.act === A.DIZZY || o.act === A.DOWN || o.act === A.HELPLESS;
+}
+
+/** run toward dir: a fresh press from neutral starts a dash; once dashing/running, keep holding */
+function runToward(f: Fighter, dir: number): number {
+  if (f.act === A.DASH || f.act === A.RUN) return dir * 100;
+  return ix(f.cur) !== 0 ? 0 : dir * 100;
 }
 
 export function botInput(st: State, f: Fighter): number {
@@ -232,21 +238,41 @@ export function botInput(st: State, f: Fighter): number {
   }
 
   if (f.gnd < 0 || (f.act !== A.IDLE && f.act !== A.WALK && f.act !== A.DASH && f.act !== A.RUN && f.act !== A.CROUCH && f.act !== A.LAND && f.act !== A.BRAKE)) {
+    // busy (mid-move): steer back toward the stage when offstage, otherwise keep drifting toward the target
+    if (offstage && f.gnd < 0) return pack(f.x < center ? 100 : -100, 0, b, 0);
     return pack(bm[6] ?? 0, 0, b, 0);
+  }
+
+  // ---- platforms: drop through to chase someone below, jump after someone above
+  if (f.gnd >= 0 && dy > 70 && dist < 420) {
+    const sf = surfaces(STAGES[st.stage], st.frame, !!st.cfg.flat)[f.gnd];
+    if (sf?.soft) return pack(0, iy(f.cur) < -30 ? 0 : -100, 0, 0);
+  }
+  if (f.gnd >= 0 && dy < -150 && dist < 260 && t.gnd >= 0 && think) {
+    bm[0] = P_HOP;
+    bm[5] = B_JUMP;
+    bm[1] = 6;
+    return pack(tdir * 40, 0, B_JUMP, 0);
   }
 
   // ---- ground: ultimate first
   if (f.ultReady && st.cfg.ult !== 'off' && dist < 600 && rnd(st, f, 16) < 0.05 + lvl * 0.01) return pack(0, 0, B_ULT, 0);
 
   // edge safety: don't run off
-  const nearEdge = (f.x < edgeL + 70 && tdir < 0) || (f.x > edgeR - 70 && tdir > 0);
+  const margin = 70 + Math.abs(f.vx) * 9;
+  const nearEdge = (f.x < edgeL + margin && tdir < 0) || (f.x > edgeR - margin && tdir > 0);
   const tOff = t.x < edgeL - 20 || t.x > edgeR + 20 || t.y > stage.y + 40;
 
+  const reachNow = 70 + cf.height * 0.45;
   if (!think) {
-    // keep doing what we were doing
-    x = bm[6];
-    if ((f.x < edgeL + 50 && x < 0) || (f.x > edgeR - 50 && x > 0)) x = 0;
-    return pack(x, 0, b, 0);
+    // close and lined up: good CPUs pounce without waiting for their next "thought"
+    const lined = dist < reachNow && Math.abs(dy) < 90 && facingT;
+    if (!(lined && rnd(st, f, 31) < lvl / 14)) {
+      // keep closing the distance (but never run off the stage)
+      if (dist > reachNow * 0.8 && bm[6] !== 0 && !nearEdge) x = runToward(f, tdir);
+      else x = 0;
+      return pack(x, 0, b, 0);
+    }
   }
 
   const heavyKill = t.dmg > 95 + (t.def >= 0 ? cfOf(t).def.weight - 100 : 0) * 0.5;
@@ -288,8 +314,8 @@ export function botInput(st: State, f: Fighter): number {
     if (r < 0.94) return pack(0, -70, B_SPECIAL, 0);
     return pack(-tdir * 100, 0, B_SHIELD, 0);
   }
-  // target above us
-  if (dy < -110 && dist < 140) {
+  // target just above us
+  if (dy < -110 && dy > -230 && dist < 140) {
     if (r < 0.5) return pack(0, 0, 0, C_UP);
     return pack(0, 60, B_ATTACK, 0);
   }
@@ -309,15 +335,10 @@ export function botInput(st: State, f: Fighter): number {
     return pack(0, 0, B_SPECIAL, 0);
   }
   // approach: dash (flick from neutral) then run
-  if (nearEdge && !tOff) {
+  if (nearEdge) {
     bm[6] = 0;
     return pack(0, 0, 0, 0);
   }
-  if (f.act === A.IDLE || f.act === A.WALK || f.act === A.BRAKE || f.act === A.LAND) {
-    bm[6] = tdir * 100;
-    bm[3] = Math.min(bm[3], 2);
-    return pack(st.frame % 2 === 0 ? 0 : tdir * 100, 0, 0, 0);
-  }
   bm[6] = tdir * 100;
-  return pack(tdir * 100, 0, 0, 0);
+  return pack(runToward(f, tdir), 0, 0, 0);
 }

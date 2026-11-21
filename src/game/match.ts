@@ -1,12 +1,43 @@
-// Running a match on this machine: the fixed 60 Hz loop, local devices, the slow-motion replay of the winning hit,
-// pause. Online matches use the same renderer through net/session.ts (rollback) instead of this loop.
+// Running a match: the fixed 60 Hz loop, the slow-motion replay of the winning hit, pause, the "waiting for…"
+// banner online. Where the frames come from is a Driver: LocalDriver steps the simulation with this machine's
+// devices; OnlineDriver (net/online.ts) runs the rollback session.
 import { A } from '../sim/acts';
 import { NEUTRAL } from '../sim/input';
 import { cloneState, initState, step } from '../sim/sim';
 import type { MatchCfg, State } from '../sim/types';
+import { bigText } from '../render/hud';
 import { Renderer, type ViewOpts } from '../render/renderer';
 import { readDevice, type Device } from './input';
 import { audio } from '../audio/audio';
+
+export interface Driver {
+  readonly online: boolean;
+  state(): State;
+  /** one 60 Hz tick; call onStep after every simulated frame (including replays after a rollback) */
+  tick(onStep: (st: State) => void): void;
+  /** text for a banner while stalled (online) */
+  waiting?(): string | null;
+  stop?(): void;
+}
+
+export class LocalDriver implements Driver {
+  readonly online = false;
+  st: State;
+  constructor(
+    cfg: MatchCfg,
+    public devices: (Device | null)[],
+  ) {
+    this.st = initState(cfg);
+  }
+  state(): State {
+    return this.st;
+  }
+  tick(onStep: (st: State) => void): void {
+    const inputs = this.devices.map((d) => (d ? readDevice(d) : NEUTRAL));
+    step(this.st, inputs);
+    onStep(this.st);
+  }
+}
 
 export interface MatchHooks {
   onEnd: (st: State) => void;
@@ -15,8 +46,7 @@ export interface MatchHooks {
 
 const STEP = 1 / 60;
 
-export class LocalMatch {
-  st: State;
+export class Match {
   r: Renderer;
   private raf = 0;
   private acc = 0;
@@ -25,18 +55,21 @@ export class LocalMatch {
   private replay: { states: State[]; i: number; sub: number; x: number; y: number } | null = null;
   private ended = false;
   private paused = false;
+  private sawOver = false;
   stopped = false;
 
   constructor(
     canvas: HTMLCanvasElement,
-    public cfg: MatchCfg,
-    public devices: (Device | null)[],
+    public driver: Driver,
     public view: ViewOpts,
     public hooks: MatchHooks,
   ) {
-    this.st = initState(cfg);
     this.r = new Renderer(canvas);
     this.r.fx.onEvent = (e, st) => audio.event(e, st);
+  }
+
+  get st(): State {
+    return this.driver.state();
   }
 
   start(): void {
@@ -55,24 +88,27 @@ export class LocalMatch {
     this.stopped = true;
     cancelAnimationFrame(this.raf);
     window.removeEventListener('keydown', this.onKey);
+    this.driver.stop?.();
     audio.stopMusic();
   }
 
   private onKey = (e: KeyboardEvent): void => {
-    if (e.code === 'Escape' || e.code === 'Enter') {
-      if (this.st.over || this.replay) return;
-      this.togglePause();
+    if (e.code === 'Escape' && !this.st.over && !this.replay && !this.driver.online) this.togglePause();
+    if (e.code === 'KeyH' && e.ctrlKey) {
+      e.preventDefault();
+      this.view.boxes = !this.view.boxes;
     }
-    if (e.code === 'KeyH' && e.ctrlKey) this.view.boxes = !this.view.boxes;
   };
 
   private togglePause(): void {
-    if (this.paused) return;
+    if (this.paused || !this.hooks.onPause) return;
     this.paused = true;
-    this.hooks.onPause?.(
+    audio.sfx('menu');
+    this.hooks.onPause(
       () => {
         this.paused = false;
         this.last = performance.now();
+        this.acc = 0;
       },
       () => {
         this.stop();
@@ -85,12 +121,13 @@ export class LocalMatch {
   private frame(now: number): void {
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
-    // gamepad Start pauses
-    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
-    let start = false;
-    for (const g of pads) if (g?.buttons[9]?.pressed) start = true;
-    if (start && !this.padStartWasDown && !this.st.over) this.togglePause();
-    this.padStartWasDown = start;
+    if (!this.driver.online) {
+      const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+      let start = false;
+      for (const g of pads) if (g?.buttons[9]?.pressed) start = true;
+      if (start && !this.padStartWasDown && !this.st.over) this.togglePause();
+      this.padStartWasDown = start;
+    }
     if (this.paused) {
       this.r.draw(this.st, this.view, 0);
       return;
@@ -101,44 +138,51 @@ export class LocalMatch {
     }
     this.acc += dt;
     let n = 0;
-    while (this.acc >= STEP && n < 5) {
+    while (this.acc >= STEP && n < 6) {
       this.acc -= STEP;
       n++;
-      const inputs = this.devices.map((d) => (d ? readDevice(d) : NEUTRAL));
-      const wasOver = this.st.over;
-      step(this.st, inputs);
-      this.r.ingest(this.st, this.view.tints);
-      if (!this.st.over) {
-        this.hist.push(cloneState(this.st));
+      this.driver.tick((s) => this.r.ingest(s, this.view.tints));
+      const st = this.st;
+      if (!st.over) {
+        this.hist.push(cloneState(st));
         if (this.hist.length > 100) this.hist.shift();
       }
-      if (this.st.over && !wasOver) {
+      if (st.over && !this.sawOver) {
+        this.sawOver = true;
         this.startReplay();
         break;
       }
-      if (this.st.over && this.st.overFrame > 190 && !this.ended) {
+      if (st.over && st.overFrame > 190 && !this.ended) {
         this.ended = true;
         setTimeout(() => {
           this.stop();
           this.hooks.onEnd(this.st);
-        }, 300);
+        }, 250);
       }
     }
-    if (this.acc > STEP * 5) this.acc = 0;
+    if (this.acc > STEP * 6) this.acc = 0;
     this.r.draw(this.st, this.view, dt);
+    const w = this.driver.waiting?.();
+    if (w) {
+      const c = this.r.c;
+      c.setTransform(1, 0, 0, 1, 0, 0);
+      c.fillStyle = 'rgba(0,0,0,0.45)';
+      c.fillRect(0, this.r.h * 0.4, this.r.w, this.r.h * 0.16);
+      bigText(c, w, this.r.w / 2, this.r.h * 0.48, Math.round(this.r.h * 0.045), '#ffe14f');
+    }
   }
 
   /** slow-motion zoom on the winning hit */
   private startReplay(): void {
     const st = this.st;
-    if (st.cfg.practice || this.hist.length < 20 || st.cfg.goal?.kind === 'survive') return;
-    // the fighter who went out last
+    if (st.cfg.practice || this.hist.length < 20 || st.cfg.goal?.kind === 'survive' || st.cfg.goal?.kind === 'ko') return;
     const victim = st.koOrder[st.koOrder.length - 1] ?? st.fighters.find((f) => f.act === A.DEAD)?.i ?? -1;
     if (victim < 0) return;
-    // find the last hit on them in the history
     let hitAt = -1;
     for (let i = this.hist.length - 1; i >= 0; i--) {
-      if (this.hist[i].ev.some((e) => e.t === 'hit' && e.p !== victim && Math.abs(e.x - this.hist[i].fighters[victim].x) < 260)) {
+      const h = this.hist[i];
+      const vf = h.fighters[victim];
+      if (h.ev.some((e) => e.t === 'hit' && e.p !== victim && Math.abs(e.x - vf.x) < 260 && Math.abs(e.y - vf.y) < 300)) {
         hitAt = i;
         break;
       }
@@ -155,12 +199,13 @@ export class LocalMatch {
   private runReplay(dt: number): void {
     const rp = this.replay!;
     const s = rp.states[rp.i];
+    // keep the online session ticking underneath (so nobody stalls waiting for us)
+    if (this.driver.online) this.driver.tick(() => {});
     this.r.cam.punchX = rp.x;
     this.r.cam.punchY = rp.y;
     this.r.cam.punch = Math.min(0.75, this.r.cam.punch + 0.05);
     if (rp.sub === 0) this.r.ingest(s, this.view.tints);
     this.r.draw(s, { ...this.view, hideHud: true }, dt * 0.25);
-    // blue-white tint while slowed
     const c = this.r.c;
     c.setTransform(1, 0, 0, 1, 0, 0);
     c.fillStyle = 'rgba(120,170,255,0.12)';
@@ -177,4 +222,9 @@ export class LocalMatch {
       }
     }
   }
+}
+
+/** convenience for local matches */
+export function localMatch(canvas: HTMLCanvasElement, cfg: MatchCfg, devices: (Device | null)[], view: ViewOpts, hooks: MatchHooks): Match {
+  return new Match(canvas, new LocalDriver(cfg, devices), view, hooks);
 }

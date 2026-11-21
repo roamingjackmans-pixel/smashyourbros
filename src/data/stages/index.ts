@@ -27,6 +27,7 @@ const studio: StageDef = {
   respawn: [0, -620],
   music: 'studio',
   bg: 'studio',
+  hazard: 'light',
 };
 
 const rooftops: StageDef = {
@@ -53,6 +54,7 @@ const rooftops: StageDef = {
   respawn: [0, -640],
   music: 'rooftops',
   bg: 'rooftops',
+  hazard: 'sign',
 };
 
 const ship = { ay: 14, period: 260 };
@@ -81,6 +83,7 @@ const galleon: StageDef = {
   respawn: [0, -660],
   music: 'galleon',
   bg: 'galleon',
+  hazard: 'cannon',
 };
 
 const orbit: StageDef = {
@@ -108,6 +111,7 @@ const orbit: StageDef = {
   respawn: [0, -640],
   music: 'orbit',
   bg: 'orbit',
+  hazard: 'debris',
 };
 
 export const STAGE_DEFS: StageDef[] = [studio, rooftops, galleon, orbit];

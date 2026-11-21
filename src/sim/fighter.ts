@@ -19,6 +19,8 @@ const BUF = 8; // input buffer frames
 const TECH_WIN = 11;
 const TECH_LOCK = 40;
 const NORMAL_LAND = 3;
+/** grounded normals stop at the stage edge (specials may carry you off on purpose) */
+const EDGE_STOP_MOVES = new Set(['jab1', 'jab2', 'jab3', 'jab', 'ftilt', 'utilt', 'dtilt', 'dash', 'fsmash', 'usmash', 'dsmash', 'grab', 'dashgrab', 'pummel', 'fthrow', 'bthrow', 'uthrow', 'dthrow', 'getupatk', 'ledgeatk', 'itemSwing', 'itemSmash', 'itemDash', 'itemThrow', 'itemShoot', 'taunt']);
 
 // ------------------------------------------------------------------ helpers
 
@@ -1180,7 +1182,7 @@ function physics(st: State, f: Fighter, cf: CFighter, active: boolean): void {
         }
         if (!(f.x >= sf.x1 && f.x <= sf.x2)) {
           // edge: walking and standing stop (teeter); everything else slides off
-          const stop = f.act === A.IDLE || f.act === A.WALK || f.act === A.CROUCH || f.act === A.SHIELD || f.act === A.SHIELDSTUN || f.act === A.SHIELDOFF || f.act === A.TAUNT || f.act === A.LAND || f.act === A.HOLD || f.act === A.SPOT || (m?.edgeStop ?? false);
+          const stop = f.act === A.IDLE || f.act === A.WALK || f.act === A.CROUCH || f.act === A.SHIELD || f.act === A.SHIELDSTUN || f.act === A.SHIELDOFF || f.act === A.TAUNT || f.act === A.LAND || f.act === A.HOLD || f.act === A.SPOT || (m ? (m.edgeStop ?? EDGE_STOP_MOVES.has(cf.moveIds[f.mv])) : false);
           if (stop && f.act !== A.HITSTUN) {
             f.x = clamp(f.x, sf.x1, sf.x2);
             f.vx = 0;
