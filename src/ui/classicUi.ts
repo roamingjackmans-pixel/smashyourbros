@@ -25,7 +25,7 @@ export function classicScreen(): void {
       { kind: 'off', fighter: 'kit', palette: 1, cpu: 0, team: 0, device: null, name: 'P2' },
     ];
     let intensity = 3;
-    const picker = new Picker(slots, { unlocked: p.unlocked, teams: false, editable: () => true, canSwitchKind: (i) => i === 1, devices: true, onChange: () => slots.forEach((s) => s.kind === 'cpu' && (s.kind = 'human')), active: 0, maxSlots: 2, join: true });
+    const picker = new Picker(slots, { unlocked: p.unlocked, teams: false, editable: () => true, canSwitchKind: (i) => i === 1, devices: true, onChange: () => slots.forEach((s) => s.kind === 'cpu' && (s.kind = 'human')), active: 0, maxSlots: 2, join: true, cpus: false });
     const label = h('span.chip', '');
     const paint = (): void => {
       label.textContent = `Intensity ${intensity}: ${INTENSITY_NAMES[intensity]}`;

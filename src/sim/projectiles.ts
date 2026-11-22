@@ -6,6 +6,7 @@ import { ev } from './events';
 import { bodyH, cfOf, surfs } from './fighter';
 import { datan2, dcos, dsin } from './math';
 import { SCRIPTS } from './scripts';
+import { cpuDamage } from './cpu';
 import type { Fighter, HitProps, Proj, ProjDef, Skel, State } from './types';
 
 export function projDef(p: Proj): ProjDef {
@@ -339,7 +340,7 @@ export function updateProjs(st: State, skels: Skel[]): void {
       }
       p.hitMask |= bit;
       p.hitAt[t.i] = st.frame;
-      let mult = (d.chargeable ? 1 + p.charge * 1.6 : 1) * p.v1 * (owner ? (FIGHTERS[owner.def].def.power ?? 1) : 1);
+      let mult = (d.chargeable ? 1 + p.charge * 1.6 : 1) * p.v1 * (owner ? (FIGHTERS[owner.def].def.power ?? 1) * cpuDamage(st.cfg.players[owner.i]) : 1);
       let kbm = d.chargeable ? 1 + p.charge * 0.5 : 1;
       let fxo: string | undefined;
       const hook = owner ? SCRIPTS[`${FIGHTERS[owner.def].def.id}:mult`] : undefined;

@@ -11,7 +11,7 @@ import { audio } from '../audio/audio';
 import { clear, h, liveCanvas, toast } from './dom';
 import { drawFighterAt, drawTile } from './portrait';
 import { setPadHandler, type PadEvent } from './menuPad';
-import { hintBar } from './glyphs';
+import { hintBar, type GlyphAction } from './glyphs';
 
 export interface SlotPick {
   kind: 'human' | 'cpu' | 'off';
@@ -43,6 +43,8 @@ export interface PickerOpts {
   maxSlots?: number;
   /** pads may join by pressing A / Start (local play) */
   join?: boolean;
+  /** CPU slots exist here (false in story and Classic, where extra slots are players) */
+  cpus?: boolean;
 }
 
 export function deviceLabel(d: Device | null): string {
@@ -56,6 +58,8 @@ export function deviceLabel(d: Device | null): string {
 interface Cursor {
   tile: number;
   menu: boolean;
+  /** the slot this pad is picking for: its own, or a CPU / empty slot it chose with LB / RB */
+  target: number;
 }
 
 export function deviceOptions(): Device[] {
@@ -86,12 +90,20 @@ export class Picker {
             ['move', 'Move'],
             ['menuConfirm', 'Pick'],
             ['menuX', 'Colour'],
+            ['menuRB', 'Pick for a CPU'],
+            ['menuRT', 'CPU level'],
             ['menuView', 'Menu'],
           ]
         : [
             ['move', 'Move'],
             ['menuConfirm', 'Pick / join'],
             ['menuX', 'Colour'],
+            ...(o.cpus === false
+              ? []
+              : ([
+                  ['menuRB', 'Pick for a CPU'],
+                  ['menuRT', 'CPU level'],
+                ] as [GlyphAction, string][])),
             ['menuBack', 'Leave / back'],
             ['menuView', 'Menu'],
             ['menuStart', 'Fight!'],
@@ -112,6 +124,18 @@ export class Picker {
   /** the slot a pad plays in */
   private slotOf(pad: number): number {
     return this.slots.findIndex((s, i) => s.kind === 'human' && s.device?.kind === 'pad' && s.device.index === pad && this.o.editable(i));
+  }
+
+  /** slots a pad in slot `si` can pick for: its own, then each CPU slot and empty slot it may edit */
+  private targets(si: number): number[] {
+    const max = this.o.maxSlots ?? 4;
+    const out = [si];
+    if (this.o.cpus === false) return out;
+    this.slots.forEach((s, i) => {
+      if (i === si || i >= max || !this.o.editable(i)) return;
+      if (s.kind === 'cpu' || (s.kind === 'off' && this.o.canSwitchKind(i))) out.push(i);
+    });
+    return out;
   }
 
   private tiles(): HTMLElement[] {
@@ -138,7 +162,7 @@ export class Picker {
     s.ready = false;
     this.o.active = j;
     const ti = ROSTER.findIndex((r) => r.def.id === s.fighter);
-    this.cursors.set(pad.index, { tile: Math.max(0, ti), menu: false });
+    this.cursors.set(pad.index, { tile: Math.max(0, ti), menu: false, target: j });
     audio.sfx('select');
     toast(`P${j + 1} joined with ${pad.model} ${padNumber(pad.index)}. Welcome to the show, bro!`);
     this.renderSlots();
@@ -155,10 +179,13 @@ export class Picker {
     let cur = this.cursors.get(pad.index);
     if (!cur) {
       const ti = ROSTER.findIndex((r) => r.def.id === this.slots[si].fighter);
-      cur = { tile: Math.max(0, ti), menu: false };
+      cur = { tile: Math.max(0, ti), menu: false, target: si };
       this.cursors.set(pad.index, cur);
       this.markTags();
     }
+    // the slot it picks for must still be one it may edit (a CPU slot can be switched off meanwhile)
+    if (!this.targets(si).includes(cur.target)) cur.target = si;
+    const tg = cur.target;
     if (cur.menu) {
       // the shared focus (Rules, CPUs, devices, the top bar); View or Back returns to the grid
       if (ev === 'view' || ev === 'back') {
@@ -182,9 +209,14 @@ export class Picker {
         if (ev === 'left') i = i % cols === 0 ? Math.min(n - 1, i + cols - 1) : i - 1;
         else if (ev === 'right') i = i % cols === cols - 1 || i === n - 1 ? i - (i % cols) : i + 1;
         else if (ev === 'up') i = i - cols >= 0 ? i - cols : Math.min(n - 1, i + cols * Math.floor((n - 1 - i) / cols));
-        else i = i + cols < n ? i + cols : i % cols;
+        else {
+          // down: onto the row below, or its last tile when that row is shorter (Random sits alone at the end)
+          const row = Math.floor(i / cols);
+          const lastRow = Math.floor((n - 1) / cols);
+          i = row < lastRow ? Math.min(i + cols, n - 1) : i % cols;
+        }
         cur.tile = i;
-        this.o.active = si;
+        this.o.active = tg;
         audio.sfx('menu');
         this.markTags();
         this.paintActive();
@@ -193,15 +225,52 @@ export class Picker {
       case 'confirm': {
         const tile = tiles[cur.tile];
         if (!tile) return true;
-        this.o.active = si;
+        this.o.active = tg;
         tile.click();
         return true;
       }
       case 'x':
       case 'y':
-        this.palette(si, ev === 'x' ? -1 : 1);
+        this.palette(tg, ev === 'x' ? -1 : 1);
         return true;
+      case 'lb':
+      case 'rb': {
+        // LB / RB: pick for your own slot, a CPU, or an empty slot (which becomes a CPU when you pick)
+        const list = this.targets(si);
+        const k = list.indexOf(tg);
+        cur.target = list[(k + (ev === 'rb' ? 1 : -1) + list.length) % list.length];
+        const s = this.slots[cur.target];
+        if (s.kind !== 'off') cur.tile = Math.max(0, this.tiles().findIndex((t) => t.dataset.id === s.fighter));
+        this.o.active = cur.target;
+        audio.sfx('menu');
+        this.markTags();
+        this.paintActive();
+        return true;
+      }
+      case 'lt':
+      case 'rt': {
+        // LT / RT: the CPU's level
+        const s = this.slots[tg];
+        if (s.kind !== 'cpu') {
+          if (this.o.cpus !== false && this.targets(si).length > 1) toast('Press RB to pick for a CPU first, then LT / RT sets its level.');
+          return true;
+        }
+        s.cpu = Math.max(1, Math.min(9, (s.cpu || 5) + (ev === 'rt' ? 1 : -1)));
+        audio.sfx('menu');
+        this.renderSlots();
+        this.o.onChange();
+        return true;
+      }
       case 'back': {
+        // picking for a CPU: back to your own slot first
+        if (tg !== si) {
+          cur.target = si;
+          this.o.active = si;
+          audio.sfx('back');
+          this.markTags();
+          this.paintActive();
+          return true;
+        }
         // the first player backs out of the screen; anyone else leaves their slot
         const lead = this.slots.findIndex((s, i) => s.kind === 'human' && this.o.editable(i));
         if (si === lead || !this.o.canSwitchKind(si) || this.o.join === false) return false;
@@ -229,7 +298,7 @@ export class Picker {
   /** outline the slot that's picking */
   private paintActive(): void {
     Array.from(this.slotsEl.children).forEach((el, i) => {
-      if (!(el instanceof HTMLElement) || el.classList.contains('off')) return;
+      if (!(el instanceof HTMLElement)) return;
       el.style.outline = this.o.active === i && this.o.editable(i) ? '4px solid #fff' : '';
     });
   }
@@ -278,21 +347,26 @@ export class Picker {
   private markTags(): void {
     const tiles = this.tiles();
     tiles.forEach((tile, ti) => {
+      // the Random tile has no tag strip, but still shows cursors
       const tags = tile.querySelector('.tags');
-      if (!tags) return;
-      clear(tags as HTMLElement);
-      this.slots.forEach((s, i) => {
-        if (s.kind === 'off' || s.fighter !== tile.dataset.id) return;
-        tags.appendChild(h('span', { style: { background: slotTint(s, i, this.o.teams) } }, s.kind === 'cpu' ? 'C' : String(i + 1)));
-      });
-      // each pad player's own cursor
+      if (tags) {
+        clear(tags as HTMLElement);
+        this.slots.forEach((s, i) => {
+          if (s.kind === 'off' || s.fighter !== tile.dataset.id) return;
+          tags.appendChild(h('span', { style: { background: slotTint(s, i, this.o.teams) } }, s.kind === 'cpu' ? 'C' : String(i + 1)));
+        });
+      }
+      // each pad player's own cursor, labelled with the slot it's picking for
       for (const el of Array.from(tile.querySelectorAll('.pcur'))) el.remove();
       for (const [pad, c] of this.cursors) {
         if (c.menu || c.tile !== ti) continue;
         const si = this.slotOf(pad);
         if (si < 0) continue;
-        const tint = slotTint(this.slots[si], si, this.o.teams);
-        tile.appendChild(h('div.pcur', { style: { borderColor: tint } }, h('b', { style: { background: tint } }, `P${si + 1}`)));
+        const tg = this.targets(si).includes(c.target) ? c.target : si;
+        const ts = this.slots[tg];
+        const tint = slotTint(ts.kind === 'off' ? this.slots[si] : ts, tg, this.o.teams);
+        const label = tg === si ? `P${si + 1}` : ts.kind === 'off' ? `P${si + 1} → +CPU` : `P${si + 1} → CPU`;
+        tile.appendChild(h('div.pcur', { style: { borderColor: tint } }, h('b', { style: { background: tint } }, label)));
       }
     });
     // forget the cursors of pads that left their slot

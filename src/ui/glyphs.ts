@@ -10,14 +10,14 @@ import type { PromptStyle } from '../game/profile';
 
 export type GlyphStyle = 'keyboard' | PadKind;
 /** What a prompt can name: P1's pad actions, the sticks, and the menu buttons. */
-export type GlyphAction = PadAction | 'move' | 'cstick' | 'menuConfirm' | 'menuBack' | 'menuStart' | 'menuView' | 'menuX' | 'menuY' | 'menuLB' | 'menuRB';
+export type GlyphAction = PadAction | 'move' | 'cstick' | 'menuConfirm' | 'menuBack' | 'menuStart' | 'menuView' | 'menuX' | 'menuY' | 'menuLB' | 'menuRB' | 'menuLT' | 'menuRT';
 /** One physical input: a KeyboardEvent.code (or a label like 'WASD'), or a pad button (−1 left stick, −2 right). */
 export type GlyphInput = string | number;
 
 export const PAD_LSTICK = -1;
 export const PAD_RSTICK = -2;
 
-const GLYPH_ACTIONS: readonly GlyphAction[] = ['attack', 'special', 'jump', 'shield', 'grab', 'ult', 'taunt', 'pause', 'move', 'cstick', 'menuConfirm', 'menuBack', 'menuStart', 'menuView', 'menuX', 'menuY', 'menuLB', 'menuRB'];
+const GLYPH_ACTIONS: readonly GlyphAction[] = ['attack', 'special', 'jump', 'shield', 'grab', 'ult', 'taunt', 'pause', 'move', 'cstick', 'menuConfirm', 'menuBack', 'menuStart', 'menuView', 'menuX', 'menuY', 'menuLB', 'menuRB', 'menuLT', 'menuRT'];
 
 // ---------------------------------------------------------------------------------------------------------------
 // where settings come from (the live app registers itself; tests inject their own)
@@ -99,6 +99,10 @@ export function actionInputs(action: GlyphAction, style: GlyphStyle = promptStyl
       return [4];
     case 'menuRB':
       return [5];
+    case 'menuLT':
+      return [6];
+    case 'menuRT':
+      return [7];
   }
   return [...source.layout().buttons[action]];
 }

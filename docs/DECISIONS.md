@@ -113,3 +113,20 @@ Newest last. Each: what, why.
   49.0–51.4% (was 41.3–58.2%); per condition the best-minus-worst spread is 8.1 / 11.1 / 16.0 points (was 17.2 /
   23.6 / 21.0) and 12.8 on the default rules, which weren't tuned on (was 20.8). The one gap over 15 is CPU 6, where
   Nimbus (58%) and Clank (42%) depend on the CPU's skill, not their stats. Full report: `docs/BALANCE.md`.
+- **D26 (owner: "you can't change the AI's character or level from a controller… make level 1 easy and level 9
+  really hard")** Character select by pad: each pad's cursor picks for a *target* slot, its own by default. LB / RB
+  cycle the target through the CPU slots and empty slots ("+CPU": picking there adds a CPU), A picks the fighter,
+  X / Y the colour, LT / RT the CPU's level, B returns to your own slot; the cursor's badge says who it's picking for
+  ("P1 → CPU"). The Random tile now shows cursors (the tag-strip loop skipped it), down from any column reaches it,
+  and cursors have a white inner ring so they read on any tile. Difficulty: one skill table per level in
+  `sim/bot.ts`. Levels 1–5 got weaker tactics (level 1 wanders, walks, only uses light attacks, never shields, techs
+  or DIs, recovers late); levels 6–9 keep the old tactics exactly, so balance measured at 6 and 9 carries over, and
+  `sim/cpu.ts` scales damage dealt (level 1 ×0.8 … level 9 ×1.22) and knockback taken (×1.1 … ×0.88); bosses and
+  stagehand fodder are exempt. Smarter top-level tactics (last-moment shields that parry, combo follow-ups) were
+  tried first and dropped: they made level 9 stronger, but much more for swords and grabbers than for light fighters,
+  and broke the balance. Measured with `npm run balance -- --ladder`: every level beats the one below (level 2 beats
+  1 99% of the time, 9 beats 8 69%), level 9 beats level 6 83% and level 5 88% of the time, and level 1 wins under 2%
+  against anyone. Story enemies were mapped onto the new curve so the story plays as before (3→4, 4→5, Max Ratings'
+  level-8 fight →7). Balance re-measured, since a harder level 9 changes how CPU-9 matches go: Bouldar's damage −1.7%,
+  Coral's and Echo's +1.4%; spreads 9.5 / 13.7 / 15.9 points (CPU 9 / no ultimates / CPU 6) and 14.5 on the default
+  rules; every fighter's average 48.4–52.1%. `docs/BALANCE.md` has the ladder.

@@ -8,7 +8,7 @@ import { getPad, padEdge, padList, swallowButton, type PadState } from '../game/
 import { defaultMenuPad, type MenuPad } from '../game/padLayout';
 import { audio } from '../audio/audio';
 
-export type PadEvent = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'start' | 'view' | 'x' | 'y' | 'lb' | 'rb';
+export type PadEvent = 'up' | 'down' | 'left' | 'right' | 'confirm' | 'back' | 'start' | 'view' | 'x' | 'y' | 'lb' | 'rb' | 'lt' | 'rt';
 /** a screen's own pad handling: return true when it used the press */
 export type PadHandler = (ev: PadEvent, pad: PadState) => boolean;
 
@@ -199,6 +199,9 @@ export function menuAction(ev: PadEvent, scope: HTMLElement, pad: number): void 
     case 'rb':
       stepTabs(scope, ev === 'lb' ? -1 : 1);
       return;
+    case 'lt':
+    case 'rt':
+      return;
     case 'x':
     case 'y':
       if (inScope) el.dispatchEvent(new CustomEvent(ev === 'x' ? 'pad-x' : 'pad-y', { bubbles: true, detail: pad }));
@@ -297,6 +300,8 @@ export function pollMenuPad(now: number): void {
       ['view', 8],
       ['lb', 4],
       ['rb', 5],
+      ['lt', 6],
+      ['rt', 7],
     ];
     if (mp.confirm !== 2 && mp.back !== 2) btn.push(['x', 2]);
     if (mp.confirm !== 3 && mp.back !== 3) btn.push(['y', 3]);

@@ -16,11 +16,11 @@ export interface Tuning {
 
 export const TUNING: Record<string, Tuning> = {
   amp: { power: 1.015, reach: 1.023 },
-  bouldar: { power: 0.957, reach: 1.005, recovery: 1.013 },
+  bouldar: { power: 0.94, reach: 1.005, recovery: 1.013 },
   chef: { power: 1.057, reach: 1.053 },
   clank: { power: 0.956, reach: 1.111, recovery: 1.229 },
-  coral: { power: 1.051, reach: 1.044 },
-  echo: { power: 0.971, reach: 1.005 },
+  coral: { power: 1.065, reach: 1.044 },
+  echo: { power: 0.985, reach: 1.005 },
   granny: { power: 0.985, reach: 1.007, recovery: 1.017 },
   hoot: { power: 0.997, reach: 1.012, recovery: 1.031 },
   inverta: { power: 1.025, reach: 1.026, recovery: 1.066 },

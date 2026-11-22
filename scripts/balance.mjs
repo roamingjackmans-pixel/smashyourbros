@@ -2,6 +2,7 @@
 // one level, run across worker threads. Prints win rates and the stats behind them and writes JSON.
 //   npm run balance                       (3 seeds, CPU level 9, 2 stocks)
 //   node scripts/balance.mjs --seeds 6 --level 9 --stocks 2 --ult off --items 2 --out balance.json
+//   npm run balance -- --ladder           (the difficulty curve: CPU level against CPU level, D26)
 // The sim is bundled once with rolldown (TypeScript → one ESM file) so plain Node workers can run it.
 import { Worker, isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
@@ -19,7 +20,8 @@ function arg(name, d) {
 
 /** one match: [a, b, stage, seed] → result */
 function play(sim, job, o) {
-  const [a, b, stage, seed] = job;
+  const [a, b, stage, seed, la, lb] = job;
+  const lv = [la ?? o.level, lb ?? o.level];
   const cfg = {
     seed,
     stage,
@@ -33,7 +35,7 @@ function play(sim, job, o) {
     teams: false,
     friendlyFire: false,
     hazards: false,
-    players: [a, b].map((f, i) => ({ fighter: f, color: i, team: i, cpu: o.level, name: f, tapJump: false })),
+    players: [a, b].map((f, i) => ({ fighter: f, color: i, team: i, cpu: lv[i], name: f, tapJump: false })),
   };
   const st = sim.initState(cfg);
   const bottom = [0, 0];
@@ -48,6 +50,7 @@ function play(sim, job, o) {
     b,
     stage,
     winner,
+    lv,
     frames: st.frame,
     f: st.fighters.slice(0, 2).map((f, i) => ({ kos: f.st.kos, falls: f.st.falls, sds: f.st.sds, dealt: f.st.dealt, ults: f.st.ults, bottom: bottom[i], stocks: f.stocks })),
   };
@@ -67,6 +70,7 @@ if (!isMainThread) {
     ult: arg('ult', 'meter'),
     items: Number(arg('items', 0)),
     only: arg('only', ''),
+    ladder: process.argv.includes('--ladder'),
   };
   const outFile = arg('out', '');
   const t0 = Date.now();
@@ -86,12 +90,27 @@ if (!isMainThread) {
   // every ordered pair (both sides), every stage, every seed
   const jobs = [];
   let seed = 1000;
-  for (const a of ids)
-    for (const b of ids) {
-      if (a === b) continue;
-      if (o.only && a !== o.only && b !== o.only) continue;
-      for (const stage of stages) for (let k = 0; k < o.seeds; k++) jobs.push([a, b, stage, seed++]);
-    }
+  if (o.ladder) {
+    // level against level: every fighter against three others, both sides, every stage
+    const pairs = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [1, 3], [1, 5], [3, 6], [5, 9], [6, 9], [1, 9]];
+    for (const [la, lb] of pairs)
+      for (let i = 0; i < ids.length; i++)
+        for (let k = 1; k <= 3; k++) {
+          const a = ids[i];
+          const b = ids[(i + k * 5) % ids.length];
+          const stage = stages[(i + k) % stages.length];
+          for (let q = 0; q < Math.max(1, Math.round(o.seeds / 3)); q++) {
+            jobs.push([a, b, stage, seed++, la, lb]);
+            jobs.push([b, a, stage, seed++, lb, la]);
+          }
+        }
+  } else
+    for (const a of ids)
+      for (const b of ids) {
+        if (a === b) continue;
+        if (o.only && a !== o.only && b !== o.only) continue;
+        for (const stage of stages) for (let k = 0; k < o.seeds; k++) jobs.push([a, b, stage, seed++]);
+      }
   const n = Math.max(1, Math.min(cpus().length - 2, 22));
   const chunks = Array.from({ length: n }, () => []);
   jobs.forEach((j, i) => chunks[i % n].push(j));
@@ -108,6 +127,28 @@ if (!isMainThread) {
     )
   ).flat();
   rmSync(bundleFile, { force: true });
+  if (o.ladder) {
+    // the lower level's share of wins in each pairing, plus how it lost (falls off the bottom, self-destructs)
+    const by = new Map();
+    for (const r of results) {
+      const lo = r.lv[0] < r.lv[1] ? 0 : 1;
+      const key = `${r.lv[lo]} vs ${r.lv[1 - lo]}`;
+      const g = by.get(key) ?? { games: 0, lowWins: 0, draws: 0, lowFalls: 0, lowSds: 0, highFalls: 0, secs: 0 };
+      g.games++;
+      if (r.winner === lo) g.lowWins++;
+      else if (r.winner < 0) g.draws++;
+      g.lowFalls += r.f[lo].falls;
+      g.lowSds += r.f[lo].sds;
+      g.highFalls += r.f[1 - lo].falls;
+      g.secs += r.frames / 60;
+      by.set(key, g);
+    }
+    const lines = [`${results.length} matches, ${o.stocks} stocks, ult ${o.ult}: lower level's win rate`, 'pairing   low wins   low falls/g  low SDs/g  high falls/g  secs'];
+    for (const [k, g] of by) lines.push(`${k.padEnd(8)}  ${(((g.lowWins + g.draws / 2) / g.games) * 100).toFixed(1).padStart(6)}%    ${(g.lowFalls / g.games).toFixed(2).padStart(6)}     ${(g.lowSds / g.games).toFixed(2).padStart(6)}     ${(g.highFalls / g.games).toFixed(2).padStart(6)}    ${(g.secs / g.games).toFixed(0).padStart(4)}`);
+    console.log(lines.join('\n'));
+    if (outFile) writeFileSync(outFile, JSON.stringify({ o, matches: results.length, ladder: Object.fromEntries(by) }, null, 1));
+    process.exit(0);
+  }
   // aggregate
   const agg = Object.fromEntries(ids.map((id) => [id, { games: 0, wins: 0, draws: 0, kos: 0, falls: 0, sds: 0, bottom: 0, dealt: 0, ults: 0, frames: 0 }]));
   const vs = Object.fromEntries(ids.map((id) => [id, Object.fromEntries(ids.map((x) => [x, [0, 0]]))]));

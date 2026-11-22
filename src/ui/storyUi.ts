@@ -197,6 +197,7 @@ function storySetup(n: StoryNode): void {
       },
       active: 0,
       join: true,
+      cpus: false,
     });
     root.appendChild(
       h(

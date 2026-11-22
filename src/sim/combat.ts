@@ -10,6 +10,7 @@ import { mod } from './mods';
 import { bonePoint } from './rig';
 import { heldItemDef, hitApplied } from './items';
 import { SCRIPTS } from './scripts';
+import { cpuDamage, cpuKnockbackTaken } from './cpu';
 import type { Fighter, HitDef, HitProps, Skel, State } from './types';
 
 export type Capsule = [number, number, number, number, number];
@@ -106,6 +107,7 @@ export function attackMult(st: State, a: Fighter, moveIdx: number): { dmg: numbe
   if (mod(st, 'glass')) dmg *= 1.5;
   const pc = st.cfg.players[a.i];
   if (pc?.dmgMult) dmg *= pc.dmgMult;
+  dmg *= cpuDamage(pc);
   if (a.counterT > 0) dmg *= a.counterMult;
   const hook = SCRIPTS[`${cfOf(a).def.id}:mult`];
   if (hook) {
@@ -229,7 +231,7 @@ export function applyHit(st: State, a: Fighter | null, t: Fighter, hp: HitProps,
   // ---- knockback
   const w = tcf.def.weight * (t.giantT > 0 || mod(st, 'giant') ? 1.4 : 1) * (t.tinyT > 0 || mod(st, 'tiny') ? 0.65 : 1);
   const pct = st.cfg.mode === 'stamina' ? Math.max(0, t.dmg) : t.dmg;
-  let kb = knockback(pct, dmg, w, hp.bkb, hp.kbg, hp.fkb) * o.kbMult;
+  let kb = knockback(pct, dmg, w, hp.bkb, hp.kbg, hp.fkb) * o.kbMult * cpuKnockbackTaken(st.cfg.players[t.i]);
   if (t.act === A.CROUCH && t.gnd >= 0) kb *= 0.85;
   const pc = st.cfg.players[t.i];
   if (pc?.kbTakenMult) kb *= pc.kbTakenMult;

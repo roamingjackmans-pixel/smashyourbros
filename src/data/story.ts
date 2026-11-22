@@ -77,7 +77,7 @@ export const EPISODES: Episode[] = [
         stage: 'studio',
         kind: 'fight',
         stocks: 2,
-        foes: [{ fighter: 'granny', cpu: 3 }],
+        foes: [{ fighter: 'granny', cpu: 4 }],
         before: [
           { who: 'granny', text: 'Ooh, look at you. Strong jaw, warm heart. Come here, sweetie bro, Granny’s got a hug for you.' },
           { who: 'you', text: 'Aw, really?' },
@@ -105,7 +105,7 @@ export const EPISODES: Episode[] = [
         stage: 'studio',
         kind: 'fight',
         stocks: 2,
-        foes: [{ fighter: 'hoot', cpu: 4 }],
+        foes: [{ fighter: 'hoot', cpu: 5 }],
         before: [
           { who: 'hoot', text: 'Ah, a new contestant. I’m obligated to destroy you. Contract clause nine. Please don’t take it personally — you have lovely posture.' },
           { who: 'you', text: 'Why are you chained to the desk?' },
@@ -132,7 +132,7 @@ export const EPISODES: Episode[] = [
         stage: 'rooftops',
         kind: 'fight',
         stocks: 2,
-        foes: [{ fighter: 'zippy', cpu: 4, ally: true }, { fighter: 'clank', cpu: 4 }, { fighter: 'kit', cpu: 4 }],
+        foes: [{ fighter: 'zippy', cpu: 5, ally: true }, { fighter: 'clank', cpu: 5 }, { fighter: 'kit', cpu: 5 }],
         before: [
           { who: 'zippy', text: 'HI! I’m Zippy! We’re partners! I ran here at three hundred kilometres an hour to tell you you look great! You look GREAT!' },
           { who: 'clank', text: 'Hark! Fair challengers! Lance and I shall duel thee most honourably. Then hug thee. Then duel thee again.' },
@@ -148,7 +148,7 @@ export const EPISODES: Episode[] = [
         kind: 'fight',
         stocks: 2,
         items: 2,
-        foes: [{ fighter: 'clank', cpu: 4 }, { fighter: 'zippy', cpu: 4 }, { fighter: 'kit', cpu: 4 }],
+        foes: [{ fighter: 'clank', cpu: 5 }, { fighter: 'zippy', cpu: 5 }, { fighter: 'kit', cpu: 5 }],
       },
       {
         id: 'e2n3',
@@ -157,7 +157,7 @@ export const EPISODES: Episode[] = [
         stage: 'rooftops',
         kind: 'fight',
         stocks: 1,
-        foes: [{ fighter: 'bouldar', cpu: 4, giant: true, hpMult: 1.5 }],
+        foes: [{ fighter: 'bouldar', cpu: 5, giant: true, hpMult: 1.5 }],
         before: [
           { who: 'bouldar', text: 'Bouldar drank… sponsor drink. Bouldar now… very big. Bouldar sorry in advance, small pebble friend.' },
         ],
@@ -196,7 +196,7 @@ export const EPISODES: Episode[] = [
         stage: 'galleon',
         kind: 'fight',
         stocks: 2,
-        foes: [{ fighter: 'granny', cpu: 5, ally: true }, { fighter: 'chef', cpu: 4 }, { fighter: 'coral', cpu: 4 }],
+        foes: [{ fighter: 'granny', cpu: 5, ally: true }, { fighter: 'chef', cpu: 5 }, { fighter: 'coral', cpu: 5 }],
         before: [
           { who: 'max', text: 'Welcome to the ROMANCE episode! Bros, look deep into each other’s eyes… now PUNCH.' },
           { who: 'chef', text: 'Magnifique! The sea air, the sunset, the beautiful bros! I have prepared a five-course KO.' },
@@ -375,7 +375,7 @@ export const EPISODES: Episode[] = [
         stage: 'studio',
         kind: 'fight',
         stocks: 2,
-        foes: [{ fighter: 'max', cpu: 8, hpMult: 1, stocks: 3 }],
+        foes: [{ fighter: 'max', cpu: 7, hpMult: 1, stocks: 3 }],
         before: [
           { who: 'max', text: 'You’re going OFF-SCRIPT? On MY show? Do you know what you’re throwing away? Fame! Fortune! A complimentary tote bag!' },
           { who: 'you', text: 'You know what, Max? You can’t buy a bro.' },

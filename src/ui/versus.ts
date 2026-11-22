@@ -219,6 +219,9 @@ export function controlsHelp(): HTMLElement {
     h('div', 'Shield + direction = roll / spot dodge · Shield in the air = air dodge · Press shield as you hit the floor while tumbling = tech · Shield right as a hit lands = PARRY.'),
     h('b', 'Controller (P1 layout)'),
     h('div.hint-bar', { style: { justifyContent: 'flex-start' } }, pad('move', 'Move'), pad('attack', 'Attack'), pad('special', 'Special'), pad('jump', 'Jump'), pad('shield', 'Shield'), pad('grab', 'Grab'), pad('ult', 'Ultimate'), pad('taunt', 'Taunt'), pad('cstick', L.cstick === 'off' ? 'Right stick: off' : cs), pad('pause', 'Pause')),
+    h('b', 'Character select with a controller'),
+    h('div.hint-bar', { style: { justifyContent: 'flex-start' } }, pad('menuConfirm', 'Pick'), pad('menuX', 'Colour'), pad('menuRB', 'Pick for a CPU or add one'), pad('menuRT', 'CPU level'), pad('menuBack', 'Back to your own slot'), pad('menuStart', 'Fight!')),
+    h('div.small.dim', 'CPU levels: 1 is a pushover that wanders about and falls off; 9 shields, parries and punishes, and hits harder.'),
     h('div.tiny.dim', 'Remap every button (per player, right stick included) in Settings → Controls. Ctrl+H toggles hitbox view in any local match.'),
   );
 }
