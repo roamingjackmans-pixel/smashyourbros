@@ -73,6 +73,8 @@ export class Match {
   private paused = false;
   private sawOver = false;
   stopped = false;
+  /** game speed: simulated seconds per real second (1 everywhere but FlashGames' "Fast Forward", D27) */
+  speed = 1;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -221,12 +223,12 @@ export class Match {
       if (now - this.drawnAt > 250) this.paint(now, 0);
       return;
     }
-    this.drawDt += dt;
+    this.drawDt += dt * this.speed;
     if (this.replay) {
       this.runReplay(dt, now);
       return;
     }
-    this.acc += dt;
+    this.acc += dt * this.speed;
     let n = 0;
     // a step is due a little early (85 %) so frame-time jitter on a 60 Hz screen doesn't skip one frame and double
     // the next; over time it still averages exactly 60 steps a second

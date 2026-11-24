@@ -172,6 +172,15 @@ export function fighterScale(st: State, f: Fighter, cf: CFighter): number {
   return s;
 }
 
+/** "Big Head Mode" (FlashGames, D27): heads this many times their size */
+export const BIG_HEAD = 2;
+
 export function fighterSkel(st: State, f: Fighter, cf: CFighter): Skel {
-  return worldSkel(cf.def.rig, fighterPose(st, f, cf), f.x, f.y, f.facing, f.grav, fighterScale(st, f, cf), plants(f));
+  const k = worldSkel(cf.def.rig, fighterPose(st, f, cf), f.x, f.y, f.facing, f.grav, fighterScale(st, f, cf), plants(f));
+  if (mod(st, 'bighead')) {
+    // the head grows away from the neck, so it stays on the shoulders
+    k.head = [k.neck[0] + (k.head[0] - k.neck[0]) * BIG_HEAD, k.neck[1] + (k.head[1] - k.neck[1]) * BIG_HEAD];
+    k.hs = BIG_HEAD;
+  }
+  return k;
 }

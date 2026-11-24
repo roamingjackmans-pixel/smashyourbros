@@ -28,6 +28,12 @@ export const MOD_IDS = [
   'potato',
   'suddenult',
   'audience',
+  // FlashGames twists (D27): only the FlashGames mode turns these on; appended so the bits above never move
+  'noshield',
+  'bighead',
+  'triple',
+  'launch',
+  'vampire',
 ] as const;
 export type ModId = (typeof MOD_IDS)[number];
 

@@ -26,6 +26,8 @@ src/game/      the match runner (local and online), input: keyboards (input.ts),
 src/ui/        DOM menus: sign-in, main menu (+ stats panel), character select, rules, lobby/friends, story, classic,
                trophies (achievements, tasks, statistics), settings, results; button prompts (glyphs.ts) and pad
                navigation of every menu (menuPad.ts).
+src/flash/     FlashGames mode (§7): the FlashRun SDK (copied unchanged), the run's rules and score (rules.ts), the
+               run itself (flashMode.ts).
 ```
 
 ## 2. Simulation conventions (read before writing a fighter)
@@ -142,3 +144,65 @@ Performance rules (D22): no canvas `filter` or `shadowBlur` in anything drawn pe
 layer or a sprite); reset to screen space with `screenT(c)`, never `setTransform(1,0,0,1,0,0)` (the backing store
 is scaled by the adaptive resolution); effects and animation advance on the 60 Hz clock, not per drawn frame; the
 match draws only when the sim advanced. Check with `?fps`.
+
+## 7. FlashGames mode
+
+FlashGames (`josephjackman.com/games/flashgames/`) is a daily 15-minute speedrun that rotates through the owner's
+single-player games: each day (midnight US Central) the server picks a game, a seed and 2–3 of its modifiers, and
+everyone plays the same run. The contract is `docs/PROTOCOL.md` in the FlashGames repo
+(`roamingjackmans-pixel/flashgames`); Smash Your Bros's side is D27.
+
+- **Boot.** `src/flash/flash-run.js` (the SDK, copied unchanged with its `.d.ts`) is imported first by `main.ts`
+  and sets `window.FlashRun`. With `?flash=<code>` the page boots `src/flash/flashMode.ts` instead of the app: no
+  sign-in, menus, save, profile, tasks, stats, achievements, socket or server, ever (the run is in memory; only the
+  device's volume and graphics settings are read). Without `?flash` nothing changes.
+- **The run** is the Classic ladder solo against CPUs: rounds 1–7, Max Ratings, The Big BROadcast (with its
+  stagehands). Your fighter is `FlashRun.rng('fighter')` over all 16 (unlocks don't matter); each loop's foes and
+  stages come from `classicRounds(fighter, seed)` with `rng('ladder:<loop>')`, each match's seed from
+  `rng('match:<loop>:<round>:<phase>')`, so everyone gets the same ladder. Intensity 3 (Classic's default; CPUs +1
+  from round 7 as in Classic); after the camera a new seeded ladder starts at intensity 6, then 9. Losing a fight
+  ends the run (`FlashRun.over(score, detail, 'dead')`, sent at the KO; the replay plays behind the card). Items
+  low, ultimates on the meter, hazards off, as in Classic.
+- **Start and end.** The first match is built and drawn, then held until `await FlashRun.ready()` resolves (the
+  first fight skips the in-game countdown: FlashGames has just counted). Between fights a card shows the points for
+  1.7 s (3 s around the host). `FlashRun.onEnd` stops the match where it stands (no more simulation or input) and
+  shows the final card.
+- **Controls.** The default P1 keyboard and every connected pad at once, with default layouts (the profile's
+  bindings are part of the save). Pads are read directly, so they work while the page around the iframe has the
+  focus; the game takes the keyboard focus on load and on click. Tap jump follows the device in use. No pause.
+- **Score** (`FlashScore`, only ever adds; `FlashRun.score` on every change): each round won 1,000 + 250 per stock
+  left + 10 per whole second under 2:00 (simulated time from GO); Max Ratings +2,000, The Big BROadcast +3,000; each
+  KO you score 100 (stagehands 25). Everything × the loop number. A strong CPU-played loop scores ~25,000;
+  `maxScore` (the server's sanity cap) is 2,000,000.
+- **HUD.** A DOM layer `#flash` outside `#ui` (anything in `#ui` counts as a menu, and menus swallow pad buttons):
+  score and detail top left, the day's modifiers top right (with their text for the first seconds), the cards.
+  Both corners step down during the camera fight, out of its HP bar. No 15-minute timer (FlashGames shows it).
+- **Modifiers** (ids are stable: old days' plans refer to them). The sim ones are `MOD_IDS` appended after the
+  lobby's, so nothing else moves:
+
+| id | name | does |
+|---|---|---|
+| `moon` | Moon Bros | sim `lowgrav` |
+| `bighead` | Big Head Mode | sim `bighead`: heads ×2 from the neck, head hurtbox ×2 (`Skel.hs`) |
+| `tiny` | Pocket Bros | sim `tiny` (excludes `giant`) |
+| `giant` | Protein Shake Night | sim `giant` (excludes `tiny`) |
+| `fast` | Fast Forward | `Match.speed` 1.5: 90 simulated frames a second |
+| `triple` | Glass Jaws | sim `triple`: every hit's damage ×3 (moves, projectiles, items, hazards); the camera's HP ÷3 |
+| `launch` | Launch Party | sim `launch`: knockback ×2 |
+| `onestock` | One and Done | 1 stock for everyone (excludes `triple`, `launch`, `hardest`) |
+| `monsoon` | Item Monsoon | items high + sim `itemrain` |
+| `mirror` | Mirror, Mirror | every foe and ally is your fighter; Max stays Max |
+| `shuffle` | Identity Crisis | a seeded random fighter every round (`rng('fighter:<loop>:<round>')`) |
+| `hardest` | Bro-pocalypse | CPUs at level 9 every loop |
+| `vampire` | Second Wind | sim `vampire`: a KO by a human resets their damage to 0% |
+| `noshield` | Shields Down | sim `noshield`: the shield never comes up (rolls, spot dodges, air dodges, techs still work) |
+| `shrink` | Shrinking Studio | sim `shrink` |
+| `lava` | The Floor Is Lava | sim `lava` |
+
+- **flash.json.** `public/flash.json` (copied to `dist/`) is `FLASH_INFO` in `src/flash/rules.ts`;
+  `tests/flash.test.ts` fails if they differ (`WRITE_FLASH_JSON=1 npx vitest run tests/flash.test.ts` rewrites it).
+  The tests also check each modifier's effect and play every allowed combination of 1–3.
+- **Trying it.** `node <FlashGames>/sdk/make-flash-url.mjs moon,bighead 12345 120` prints a `?flash=` code; open
+  `http://localhost:5175/games/smashyourbros/?flash=<code>` (`npm run dev:client`; no server needed) or the built
+  `dist` served at `/games/smashyourbros/`. On its own the run starts a second after `ready()` and ends after the
+  limit. `window.sybFlash` holds the live run (match, fight, score) for browser checks.

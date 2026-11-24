@@ -21,7 +21,7 @@ export function hurtCapsules(sk: Skel, cf: CFighter): Capsule[] {
   const lr = r.limb * s;
   return [
     [sk.hip[0], sk.hip[1], sk.neck[0], sk.neck[1], r.girth * s],
-    [sk.head[0], sk.head[1], sk.head[0], sk.head[1], r.head * s * 1.02],
+    [sk.head[0], sk.head[1], sk.head[0], sk.head[1], r.head * s * 1.02 * (sk.hs ?? 1)],
     [sk.shoulder[0], sk.shoulder[1], sk.elbowF[0], sk.elbowF[1], lr],
     [sk.elbowF[0], sk.elbowF[1], sk.handF[0], sk.handF[1], lr],
     [sk.shoulder[0], sk.shoulder[1], sk.elbowB[0], sk.elbowB[1], lr],
@@ -137,7 +137,8 @@ export interface HitOpts {
 /** resolve one hit on t. Returns 'hit' | 'shield' | 'parry' | 'counter' | 'armor' | 'wind' */
 export function applyHit(st: State, a: Fighter | null, t: Fighter, hp: HitProps, o: HitOpts): string {
   const tcf = cfOf(t);
-  const dmg = Math.round(hp.dmg * o.dmgMult * 10) / 10;
+  // "Glass Jaws" (FlashGames, D27): triple damage from every source (moves, projectiles, items, hazards)
+  const dmg = Math.round(hp.dmg * o.dmgMult * (mod(st, 'triple') ? 3 : 1) * 10) / 10;
   const side = t.x >= o.sx ? 1 : -1;
   // ---- windbox
   if (hp.wind) {
@@ -236,6 +237,7 @@ export function applyHit(st: State, a: Fighter | null, t: Fighter, hp: HitProps,
   const pc = st.cfg.players[t.i];
   if (pc?.kbTakenMult) kb *= pc.kbTakenMult;
   if (mod(st, 'glass')) kb *= 1.25;
+  if (mod(st, 'launch')) kb *= 2;
   // ---- armour
   if (t.act === A.MOVE) {
     const tm = tcf.moves[t.mv];

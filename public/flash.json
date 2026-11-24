@@ -1,0 +1,115 @@
+{
+  "v": 1,
+  "id": "smashyourbros",
+  "name": "Smash Your Bros",
+  "tagline": "A bromance platform fighter: knock your bros off the stage.",
+  "goal": "Climb the Classic ladder against CPU bros: 8 rounds, then the host’s camera. Lose a round and the run ends; beat the host and a harder loop begins.",
+  "scoring": "Each round won: 1,000, +250 per stock left, +10 per second under 2:00. Beating Max Ratings +2,000, The Big BROadcast +3,000. Each KO 100 (stagehands 25). Loop 2 doubles all of it, loop 3 triples it, and so on.",
+  "maxScore": 2000000,
+  "pick": [
+    2,
+    3
+  ],
+  "modifiers": [
+    {
+      "id": "moon",
+      "name": "Moon Bros",
+      "text": "Moon gravity: floaty jumps, endless recoveries, KOs off the top."
+    },
+    {
+      "id": "bighead",
+      "name": "Big Head Mode",
+      "text": "Every bro’s head is twice the size, and so is the target."
+    },
+    {
+      "id": "tiny",
+      "name": "Pocket Bros",
+      "text": "Everyone is pocket-sized, hits softer and flies much further.",
+      "excludes": [
+        "giant"
+      ]
+    },
+    {
+      "id": "giant",
+      "name": "Protein Shake Night",
+      "text": "Everyone is huge, heavy and hits harder.",
+      "excludes": [
+        "tiny"
+      ]
+    },
+    {
+      "id": "fast",
+      "name": "Fast Forward",
+      "text": "The whole show runs at 1.5× speed."
+    },
+    {
+      "id": "triple",
+      "name": "Glass Jaws",
+      "text": "Everyone takes triple damage from everything.",
+      "excludes": [
+        "onestock"
+      ]
+    },
+    {
+      "id": "launch",
+      "name": "Launch Party",
+      "text": "Double knockback. Every hit is a rocket ride.",
+      "excludes": [
+        "onestock"
+      ]
+    },
+    {
+      "id": "onestock",
+      "name": "One and Done",
+      "text": "One stock each, you and every foe. One fall ends the run.",
+      "excludes": [
+        "triple",
+        "launch",
+        "hardest"
+      ]
+    },
+    {
+      "id": "monsoon",
+      "name": "Item Monsoon",
+      "text": "Items pour from the sky, nonstop."
+    },
+    {
+      "id": "mirror",
+      "name": "Mirror, Mirror",
+      "text": "Every contestant is a copy of you. The host refuses."
+    },
+    {
+      "id": "shuffle",
+      "name": "Identity Crisis",
+      "text": "You play a different random bro every round."
+    },
+    {
+      "id": "hardest",
+      "name": "Bro-pocalypse",
+      "text": "Every CPU fights at the hardest level, 9, from round 1.",
+      "excludes": [
+        "onestock"
+      ]
+    },
+    {
+      "id": "vampire",
+      "name": "Second Wind",
+      "text": "Every KO you score heals you back to 0%."
+    },
+    {
+      "id": "noshield",
+      "name": "Shields Down",
+      "text": "Nobody can shield. Rolls and dodges still work."
+    },
+    {
+      "id": "shrink",
+      "name": "Shrinking Studio",
+      "text": "The blast zones close in as each round goes on."
+    },
+    {
+      "id": "lava",
+      "name": "The Floor Is Lava",
+      "text": "Lava rises over the stage every 22 seconds."
+    }
+  ]
+}

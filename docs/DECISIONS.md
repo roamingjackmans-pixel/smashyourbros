@@ -130,3 +130,24 @@ Newest last. Each: what, why.
   level-8 fight →7). Balance re-measured, since a harder level 9 changes how CPU-9 matches go: Bouldar's damage −1.7%,
   Coral's and Echo's +1.4%; spreads 9.5 / 13.7 / 15.9 points (CPU 9 / no ultimates / CPU 6) and 14.5 on the default
   rules; every fighter's average 48.4–52.1%. `docs/BALANCE.md` has the ladder.
+- **D27 (owner: "add a FlashGames mode")** Smash Your Bros joins FlashGames, the daily 15-minute seeded speedrun
+  (FlashGames repo `docs/PROTOCOL.md`; DESIGN §7). The run is the Classic ladder solo against CPUs because it is the
+  game's single-player campaign with an end (Story is co-op and scripted). Choices: the fighter from
+  `FlashRun.rng('fighter')` over all 16 (unlocks are save data); `classicRounds` takes an optional seed so each loop's
+  foes and stages come from the day's seed (no seed = the old per-fighter ladder, unchanged); intensity 3, Classic's
+  default, since one lost round ends the run and friends of every skill compare scores; after the camera a fresh
+  ladder at 6, then 9, with every point multiplied by the loop, so the 15 minutes never run dry. Losing a round
+  ends the run (protocol: `over(…, 'dead')`), sent at the KO so a closed tab can't lose it; the slow-motion replay
+  still plays behind the card. Score: wins, stocks left and speed per round, host bonuses, KOs as they happen (100;
+  stagehands 25 so farming them never beats finishing), all × loop; whole numbers that only add. 16 modifiers: the
+  ones the sim already had (low gravity, tiny, giant, item rain, shrinking blast zones, lava) plus five new sim
+  modifiers appended to `MOD_IDS` (`noshield`, `bighead`, `triple`, `launch`, `vampire`; appended so the lobby's bit
+  flags never move, and only FlashGames turns them on) and run-level ones (1.5× game speed through `Match.speed`,
+  one stock, mirror foes, a fighter per round, CPU 9). Big Head Mode also doubles the head hurtbox, so it changes
+  play, not just the look. Excluded pairs: tiny/giant (contradictory) and One and Done with triple damage, double
+  knockback or CPU 9 (a run that ends in seconds for most players). Controls are the default keyboard plus every pad
+  with default layouts (bindings live in the save); pads are read even while the page around the iframe has the
+  focus. The HUD is its own layer outside `#ui`, because anything in `#ui` is treated as a menu and swallows pad
+  buttons. Normal mode is unchanged: every new branch is behind a FlashGames-only modifier or `Match.speed` (1);
+  checked by fingerprinting whole CPU matches with every lobby modifier and every fighter's Classic ladder before
+  and after (identical).

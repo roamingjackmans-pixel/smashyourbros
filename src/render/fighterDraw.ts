@@ -138,7 +138,7 @@ function drawWashed(c: CanvasRenderingContext2D, v: FView, art: ArtDef, rig: Rig
     y0 = Math.min(y0, p[1]);
     y1 = Math.max(y1, p[1]);
   }
-  const pad = (rig.head * 2 + 70) * s;
+  const pad = (rig.head * 2 * (k.hs ?? 1) + 70) * s;
   x0 -= pad;
   y0 -= pad;
   x1 += pad;
@@ -222,6 +222,7 @@ function drawBody(c: CanvasRenderingContext2D, v: FView, art: ArtDef, rig: RigDe
   else defaultFoot(c, v, true, art, p.second);
   // head
   boneFrame(c, v, k.head, k.ang.head);
+  if (k.hs) c.scale(k.hs, k.hs);
   art.head(c, v);
   c.restore();
   // weapon then front arm

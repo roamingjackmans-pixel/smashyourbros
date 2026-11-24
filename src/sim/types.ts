@@ -90,6 +90,8 @@ export interface Skel {
   /** squash and stretch from the pose (visual only) */
   sx: number;
   sy: number;
+  /** head size multiplier ("Big Head Mode", FlashGames): the head sits further from the neck and its hurtbox grows */
+  hs?: number;
 }
 
 // ------------------------------------------------------------------ moves

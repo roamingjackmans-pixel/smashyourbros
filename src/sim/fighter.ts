@@ -456,11 +456,14 @@ function groundOptions(st: State, f: Fighter, cf: CFighter): boolean {
     if (f.sxT <= 1 && Math.abs(sx(f)) >= 70) return roll(st, f, sign(sx(f)));
     if (f.syT <= 1 && sy(f) <= -70) return spot(st, f);
     consume(f, B_SHIELD);
-    f.act = A.SHIELD;
-    f.af = 0;
-    f.shieldT = 0;
-    ev(st, 'shieldon', f.x, f.y, f.i);
-    return true;
+    // "Shields Down" (FlashGames, D27): rolls and spot dodges still work, the bubble never comes up
+    if (!mod(st, 'noshield')) {
+      f.act = A.SHIELD;
+      f.af = 0;
+      f.shieldT = 0;
+      ev(st, 'shieldon', f.x, f.y, f.i);
+      return true;
+    }
   }
   if (buffered(f, B_GRAB)) {
     consume(f, B_GRAB);

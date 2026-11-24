@@ -76,6 +76,14 @@ npm run build
 Dev shortcuts: `?quick&p1=kit&p2=clank&cpu2=7&stage=galleon&boxes` jumps into a match; `?gallery=<id>&cell=300`
 shows every pose and move of a fighter with hitboxes; `?slot=2` uses a second offline save.
 
+## FlashGames mode
+
+Opened with `?flash=<code>` (as josephjackman.com/games/flashgames/ does in an iframe), the game skips every menu
+and the save and plays the day's seeded Classic ladder solo against CPUs with 2–3 crazy modifiers, until a round is
+lost or the 15 minutes run out. `public/flash.json` describes it to FlashGames. How it works, the modifiers and the
+scoring: `docs/DESIGN.md` §7 (D27). Try one with a code from the FlashGames repo's
+`node sdk/make-flash-url.mjs moon,bighead 12345 120`.
+
 ## How it's built
 
 - `src/sim/` — the deterministic simulation (60 Hz; hitboxes and hurtboxes ride a skeleton; rollback-safe).

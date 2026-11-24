@@ -303,6 +303,12 @@ function ko(st: State, f: Fighter, side: number): void {
       else killer.stocks = Math.min(killer.stocks + 1, cfg.stocks + 2);
       ev(st, 'bounty', killer.x, killer.y, killer.i);
     }
+    // "Second Wind" (FlashGames, D27): a player's KO heals them back to 0%
+    if (mod(st, 'vampire') && killer.cpu === 0 && !killer.out && killer.act !== A.DEAD) {
+      killer.dmg = 0;
+      killer.hp = cfg.hp * (cfg.players[killer.i]?.hpMult ?? 1);
+      ev(st, 'say', killer.x, killer.y - 150, killer.i, 0, 0, 'SECOND WIND!');
+    }
   } else {
     f.st.sds++;
   }

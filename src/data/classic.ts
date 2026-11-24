@@ -16,16 +16,18 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-export function classicRounds(fighter: string): ClassicRound[] {
+/** the ladder for a fighter; `seed` (FlashGames: the day's seed) replaces the fighter's own hash for foes and stages */
+export function classicRounds(fighter: string, seed?: number): ClassicRound[] {
   const others = ROSTER.map((r) => r.def.id).filter((id) => id !== fighter);
-  let s = hash(fighter);
+  const base = seed === undefined ? hash(fighter) : seed >>> 0;
+  let s = base;
   const pick = (): string => {
     s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
     const i = s % others.length;
     return others.splice(i, 1)[0] ?? 'kit';
   };
   const stages = ['studio', 'rooftops', 'galleon', 'orbit'];
-  const st = (i: number): string => stages[(hash(fighter) + i) % stages.length];
+  const st = (i: number): string => stages[(base + i) % stages.length];
   return [
     { title: 'Round 1: Opening Act', blurb: 'One-on-one. Show the people what you’ve got.', stage: st(0), foes: [{ fighter: pick() }], stocks: 2 },
     { title: 'Round 2: Rivals', blurb: 'Another bro, another beatdown.', stage: st(1), foes: [{ fighter: pick() }], stocks: 2 },

@@ -1,5 +1,8 @@
-// Boot: styles, input, audio unlock, then either a dev quick match (?quick) or the app (sign-in, menus).
+// Boot: styles, input, audio unlock, then a FlashGames run (?flash=…), a dev quick match (?quick) or the app
+// (sign-in, menus).
 import './ui/theme.css';
+// FlashRun SDK (sets window.FlashRun; inactive without ?flash=…)
+import './flash/flash-run.js';
 import { audio } from './audio/audio';
 import { attachKeyboard, type Device } from './game/input';
 import { localMatch } from './game/match';
@@ -82,6 +85,8 @@ function quick(): void {
   (window as unknown as { syb: unknown }).syb = m;
 }
 
-if (params.has('gallery')) import('./render/gallery').then((g) => g.gallery(canvas, params.get('gallery') || 'kit', Number(params.get('pal') || 0), Number(params.get('cell') || 200)));
+// FlashGames (D27): straight into the day's run; no menus, sign-in, save or server
+if (window.FlashRun.active) import('./flash/flashMode').then((f) => f.bootFlash(canvas));
+else if (params.has('gallery')) import('./render/gallery').then((g) => g.gallery(canvas, params.get('gallery') || 'kit', Number(params.get('pal') || 0), Number(params.get('cell') || 200)));
 else if (params.has('quick')) quick();
 else import('./app').then((a) => a.boot(canvas));
