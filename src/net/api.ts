@@ -9,19 +9,23 @@ export interface User {
 
 const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
 let server = '';
-let loaded = false;
+let serverP: Promise<string> | null = null;
 
-export async function serverBase(): Promise<string> {
-  if (!loaded) {
-    loaded = true;
+/**
+ * Where the server is. Every call shares one look at config.json: calls made at the same moment (an API call and
+ * the socket, say) would otherwise go ahead before the address arrived and ask the page's own site instead.
+ */
+export function serverBase(): Promise<string> {
+  serverP ??= (async () => {
     try {
       const r = await fetch(`${BASE}/config.json`, { cache: 'no-store' });
       if (r.ok) server = String((await r.json()).server || '').replace(/\/$/, '');
     } catch {
       /* same origin */
     }
-  }
-  return server;
+    return server;
+  })();
+  return serverP;
 }
 
 export function apiRoot(): string {
